@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: 255 255 255;
+    --text: 15 23 42;
+    --muted: 100 116 139;
+  }
+
+  .dark {
+    --bg: 15 23 42;
+    --text: 241 245 249;
+    --muted: 148 163 184;
+  }
+
+  * {
+    @apply border-slate-200 dark:border-slate-700;
+  }
+
+  body {
+    @apply bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .prose pre {
+    @apply rounded-xl bg-slate-900 p-4 text-sm leading-relaxed text-slate-100;
+  }
+
+  .prose pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+
+  .prose blockquote {
+    @apply border-l-4 border-primary-400 pl-4 italic text-slate-600 dark:text-slate-400;
+  }
+
+  .prose img {
+    @apply mx-auto rounded-xl shadow-md;
+  }
+
+  .prose h2 {
+    @apply mt-10 mb-4 text-2xl font-bold;
+  }
+
+  .prose h3 {
+    @apply mt-8 mb-3 text-xl font-bold;
+  }
+
+  .prose ul {
+    @apply list-disc pl-5;
+  }
+
+  .prose ol {
+    @apply list-decimal pl-5;
+  }
+
+  .prose li {
+    @apply mb-1;
+  }
+
+  .prose table {
+    @apply w-full border-collapse;
+  }
+
+  .prose th,
+  .prose td {
+    @apply border border-slate-300 px-3 py-2 dark:border-slate-600;
+  }
+
+  .prose th {
+    @apply bg-slate-100 font-semibold dark:bg-slate-800;
+  }
+
+  [data-highlighted-line] {
+    @apply -mx-4 border-l-4 border-primary-400 bg-white/10 px-4;
+  }
+
+  [data-line-numbers] {
+    counter-reset: line;
+  }
+
+  [data-line-numbers] > [data-line]::before {
+    counter-increment: line;
+    content: counter(line);
+    @apply mr-4 inline-block w-4 text-right text-xs text-slate-500;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300 dark:bg-slate-600;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400 dark:bg-slate-500;
+}

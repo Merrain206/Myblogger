@@ -1,0 +1,87 @@
+---
+title: "使用 Next.js + MDX 构建个人博客"
+date: "2026-04-28"
+category: "前端"
+tags: ["Next.js", "MDX", "博客", "React"]
+summary: "从零开始，使用 Next.js App Router 和 MDX 搭建一个功能完善的个人博客系统。"
+---
+
+## 为什么选择 Next.js + MDX
+
+在构建个人博客时，我们需要考虑几个关键因素：
+
+1. **SEO 友好** — 博客需要被搜索引擎收录
+2. **写作体验** — Markdown/MDX 是最佳选择
+3. **性能** — 页面加载速度要快
+4. **灵活性** — 可以自定义组件和样式
+
+Next.js 的 App Router 提供了优秀的 SSR/SSG 能力，配合 MDX 可以在 Markdown 中直接使用 React 组件，非常强大。
+
+## 项目结构
+
+一个典型的博客项目结构如下：
+
+```
+src/
+├── app/
+│   ├── layout.tsx
+│   ├── page.tsx
+│   └── blog/
+│       ├── page.tsx
+│       └── [slug]/page.tsx
+├── content/posts/
+├── components/
+└── lib/
+    └── posts.ts
+```
+
+## 核心实现
+
+### 文章解析
+
+使用 `gray-matter` 解析 Markdown 文件中的 frontmatter：
+
+```typescript
+import matter from "gray-matter";
+import fs from "fs";
+
+function parsePost(fileName: string) {
+  const fileContents = fs.readFileSync(fullPath, "utf8");
+  const { data, content } = matter(fileContents);
+  return { slug, content, ...data };
+}
+```
+
+### MDX 渲染
+
+使用 `next-mdx-remote` 在服务端渲染 MDX 内容：
+
+```typescript
+import { MDXRemote } from "next-mdx-remote/rsc";
+
+<MDXRemote source={content} components={customComponents} />
+```
+
+## 代码高亮
+
+使用 `rehype-pretty-code` 配合 Shiki 实现代码块语法高亮：
+
+```typescript
+rehypePlugins: [
+  [rehypePrettyCode, { theme: "github-dark" }]
+]
+```
+
+## 总结
+
+Next.js + MDX 是构建个人博客的理想组合：
+
+| 特性 | 方案 |
+|------|------|
+| 路由 | Next.js App Router |
+| 内容 | MDX 文件 |
+| 样式 | Tailwind CSS |
+| 搜索 | Fuse.js |
+| 高亮 | rehype-pretty-code |
+
+希望这篇文章能帮助你搭建自己的博客系统！

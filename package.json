@@ -1,0 +1,39 @@
+{
+  "name": "myblogger",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@mdx-js/react": "^3.0.0",
+    "date-fns": "^4.1.0",
+    "fuse.js": "^7.0.0",
+    "gray-matter": "^4.0.3",
+    "next": "^15.3.0",
+    "next-mdx-remote": "^5.0.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "rehype-pretty-code": "^0.14.0",
+    "remark-gfm": "^4.0.0",
+    "shiki": "^3.0.0"
+  },
+  "devDependencies": {
+    "@mdx-js/loader": "^3.0.0",
+    "@next/mdx": "^15.3.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/mdx": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.5.0",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.3.0",
+    "postcss": "^8.5.12",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.7.0"
+  }
+}

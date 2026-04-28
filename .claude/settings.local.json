@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf .next)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(npm run *)",
+      "Bash(pkill -9 -f \"node\")",
+      "Bash(pkill -9 -f \"next\")",
+      "Bash(timeout 20 npx next dev)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/blog)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/blog/nextjs-mdx-blog)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/projects)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/about)",
+      "Bash(npx next *)",
+      "Bash(git config *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

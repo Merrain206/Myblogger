@@ -1,0 +1,91 @@
+---
+title: "Tailwind CSS 实用技巧与最佳实践"
+date: "2026-04-20"
+category: "前端"
+tags: ["Tailwind CSS", "CSS", "设计系统"]
+summary: "分享使用 Tailwind CSS 构建现代 Web 界面的实用技巧和常见模式。"
+---
+
+## 为什么用 Tailwind CSS
+
+Tailwind CSS 是一个 utility-first 的 CSS 框架，它提供了：
+
+- **快速开发** — 不需要离开 HTML 就能样式化元素
+- **一致性** — 内置的设计系统保证视觉一致性
+- **响应式** — 开箱即用的响应式断点
+- **暗色模式** — 轻松实现 dark mode
+
+## 实用技巧
+
+### 1. 自定义颜色主题
+
+在 `tailwind.config.js` 中扩展颜色：
+
+```javascript
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50: "#f0f9ff",
+          500: "#0ea5e9",
+          900: "#0c4a6e",
+        },
+      },
+    },
+  },
+};
+```
+
+### 2. 响应式设计
+
+使用移动优先的响应式断点：
+
+```html
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  <!-- 响应式卡片网格 -->
+</div>
+```
+
+### 3. 暗色模式
+
+```html
+<div class="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+  <!-- 自动切换暗色模式 -->
+</div>
+```
+
+### 4. 过渡动画
+
+```html
+<button class="rounded-lg bg-primary-500 px-4 py-2 text-white
+               transition-all hover:bg-primary-600 hover:shadow-lg
+               active:scale-95">
+  点击我
+</button>
+```
+
+## 常见模式
+
+### 卡片组件
+
+```html
+<div class="rounded-xl border border-slate-200 bg-white p-6
+            transition-all hover:-translate-y-1 hover:shadow-lg">
+  <h3 class="text-lg font-bold">卡片标题</h3>
+  <p class="text-slate-500">卡片内容...</p>
+</div>
+```
+
+### 渐变文字
+
+```html
+<h1 class="bg-gradient-to-r from-blue-500 to-purple-600
+           bg-clip-text text-transparent">
+  渐变标题
+</h1>
+```
+
+## 总结
+
+Tailwind CSS 让样式开发变得更加高效和一致。掌握这些技巧后，你可以快速构建出美观的现代 Web 界面。

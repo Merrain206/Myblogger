@@ -1,0 +1,80 @@
+---
+title: "Python 异步编程入门指南"
+date: "2026-04-10"
+category: "后端"
+tags: ["Python", "异步", "asyncio"]
+summary: "深入理解 Python 的 asyncio 库，掌握异步编程的核心概念和实践技巧。"
+---
+
+## 异步编程简介
+
+异步编程是一种允许程序在等待 I/O 操作时继续执行其他任务的编程范式。在 Python 中，`asyncio` 是官方提供的异步编程库。
+
+## 核心概念
+
+### async/await
+
+```python
+import asyncio
+
+async def fetch_data(url: str) -> dict:
+    """异步获取数据"""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()
+
+async def main():
+    data = await fetch_data("https://api.example.com/data")
+    print(data)
+
+asyncio.run(main())
+```
+
+### 并发执行
+
+使用 `asyncio.gather()` 并发执行多个协程：
+
+```python
+async def fetch_all(urls: list[str]) -> list[dict]:
+    tasks = [fetch_data(url) for url in urls]
+    results = await asyncio.gather(*tasks)
+    return results
+```
+
+### 超时控制
+
+```python
+async def fetch_with_timeout(url: str, timeout: float = 5.0):
+    try:
+        async with asyncio.timeout(timeout):
+            return await fetch_data(url)
+    except TimeoutError:
+        print(f"请求超时: {url}")
+        return None
+```
+
+## 性能对比
+
+| 方式 | 100 个请求耗时 | 说明 |
+|------|---------------|------|
+| 同步 | ~50s | 串行执行 |
+| 异步 | ~2s | 并发执行 |
+| 多线程 | ~5s | 受 GIL 限制 |
+
+## 最佳实践
+
+1. **避免阻塞调用** — 不要在协程中使用 `time.sleep()`，改用 `await asyncio.sleep()`
+2. **使用 async with** — 确保资源正确释放
+3. **合理设置并发度** — 使用信号量控制并发数量
+
+```python
+semaphore = asyncio.Semaphore(10)
+
+async def limited_fetch(url: str):
+    async with semaphore:
+        return await fetch_data(url)
+```
+
+## 总结
+
+异步编程是提升 I/O 密集型应用性能的有效手段。Python 的 asyncio 提供了优雅的异步编程模型，掌握它能让你的后端开发能力更上一层楼。

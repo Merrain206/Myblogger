@@ -17,7 +17,11 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git remote *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/werewolf/ai -H 'Content-Type: application/json' -d '{\"system\":\"你是一个狼人杀玩家。请用中文回复。\",\"messages\":[{\"role\":\"user\",\"content\":\"请按JSON格式回复：{\\\\\"thinking\\\\\":\\\\\"你的推理\\\\\",\\\\\"speech\\\\\":\\\\\"你的发言\\\\\"}\"}]}')",
+      "Bash(curl *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('thinking:', d.get\\('thinking',''\\)[:100]\\); print\\('speech:', d.get\\('speech',''\\)\\)\")",
+      "Bash(npx tsc *)"
     ]
   }
 }

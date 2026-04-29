@@ -63,6 +63,23 @@ export const projects: Project[] = [
     ],
   },
   {
+    title: "AI 狼人杀",
+    slug: "ai-werewolf",
+    description:
+      "由 DeepSeek API 驱动的 AI 狼人杀游戏。支持真人模式和上帝视角，每个 AI 拥有独立的推理过程和策略发言。",
+    techStack: ["Next.js", "TypeScript", "React", "Tailwind CSS", "DeepSeek API"],
+    demoUrl: "/werewolf",
+    featured: true,
+    features: [
+      "真人模式：1名真人玩家 + 5名 AI 玩家同台对战",
+      "上帝视角：观看6名 AI 玩家自动对决，揭示所有隐藏信息",
+      "DeepSeek AI 驱动：每个 AI 玩家独立推理，展示内部思考过程",
+      "完整角色：狼人、预言家、女巫、村民，各具技能",
+      "夜晚行动 + 白天讨论 + 投票淘汰完整流程",
+      "支持暗色模式，与博客主题统一",
+    ],
+  },
+  {
     title: "MyBlogger",
     slug: "myblogger",
     description:

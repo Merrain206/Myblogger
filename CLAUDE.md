@@ -12,10 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 常用命令
 
 ```bash
-npm run dev      # 启动开发服务器 (localhost:3000)
-npm run build    # 生产构建
-npm start        # 启动生产服务器
-npm run lint     # ESLint 检查
+npm run dev        # 启动开发服务器 (localhost:3000)
+npm run ws-server  # 启动五子棋 WebSocket 服务器 (端口 3001)
+npm run build      # 生产构建
+npm start          # 启动生产服务器
+npm run lint       # ESLint 检查
 ```
 
 ## 技术栈
@@ -80,3 +81,78 @@ src/content/posts/*.mdx  →  fs.readFileSync  →  gray-matter 解析
 ### MDX 配置
 
 `next.config.ts` 中通过 `@next/mdx` 配置了 `remark-gfm` 和 `rehype-pretty-code`（主题 `github-dark`），`.mdx` 文件可直接作为页面路由。
+
+## 五子棋在线对战
+
+### 架构
+
+```
+iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSocket → ws-server (端口 3001)
+```
+
+- `server/ws-server.ts` — 独立 WebSocket 服务器，房间管理/落子转发/胜负判定
+- `server/room-store.ts` — 共享内存状态，2 个固定房间 (A/B)
+- `src/app/gomoku/online/` — 在线大厅 + 房间对局页
+- `src/app/api/gomoku/rooms/route.ts` — 房间状态查询 API
+- `public/gomoku/index.html` — 游戏引擎新增 `online` 模式
+
+### 消息流
+
+1. 玩家进入房间 → WebSocket `join-room` → 分配 Guest 1/2
+2. Guest 1 等待 30s，无人加入自动解散
+3. 对局中落子 → postMessage → WebSocket `place-piece` → 服务器校验转发 `opponent-move`
+4. 服务器判定胜负 → 广播 `game-over`
+
+## 服务器部署
+
+### 服务器信息
+
+| 项目 | 值 |
+|------|-----|
+| IP | 82.157.193.186 |
+| 系统 | Ubuntu 22.04 LTS |
+| 配置 | 2核2G 4M带宽 50GB SSD |
+| SSH 用户 | ubuntu |
+| SSH 密钥 | `~/.ssh/tmp/myblogger_key` (RSA 2048) |
+| SSH 连接 | `ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186` |
+| 项目路径 | `/home/ubuntu/myblogger` |
+| Web 服务 | Nginx (80) → Next.js (3000) |
+| 进程管理 | PM2 |
+
+### PM2 进程
+
+| 名称 | 命令 | 端口 |
+|------|------|------|
+| myblogger | `npm start` (next start) | 3000 |
+| ws-gomoku | `npx tsx server/ws-server.ts` | 3001 |
+
+### 部署流程
+
+```bash
+# 1. 提交代码
+git add <files> && git commit && git push origin main
+
+# 2. 同步到服务器
+scp -i ~/.ssh/tmp/myblogger_key -r <changed-files> ubuntu@82.157.193.186:/home/ubuntu/myblogger/scp-tmp/
+ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "
+  cd /home/ubuntu/myblogger
+  cp scp-tmp/... <targets>
+  npm install
+  npm run build
+  pm2 restart myblogger ws-gomoku
+  pm2 save
+"
+```
+
+### 服务器命令速查
+
+```bash
+# 查看服务状态
+ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "pm2 list"
+
+# 查看日志
+ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "pm2 logs --lines 50"
+
+# 重启服务
+ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "pm2 restart myblogger ws-gomoku"
+```

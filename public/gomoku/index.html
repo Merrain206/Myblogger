@@ -141,11 +141,6 @@
     font-weight: 700;
   }
 
-  .settings-sep {
-    width: 1px; height: 18px;
-    background: rgba(255,255,255,0.08);
-  }
-
   /* ---- 棋盘容器 ---- */
   .board-wrapper {
     position: relative;
@@ -263,13 +258,8 @@
     </div>
   </div>
 
-  <div class="settings-bar">
-    <div class="pill-group" id="mode-group">
-      <button class="pill active" data-mode="pvp">双人对战</button>
-      <button class="pill" data-mode="pvai">人机对战</button>
-    </div>
-    <div class="settings-sep" id="diff-sep" style="display:none"></div>
-    <div class="pill-group" id="diff-group" style="display:none">
+  <div class="settings-bar" id="settings-bar">
+    <div class="pill-group" id="diff-group">
       <button class="pill active" data-diff="easy">简单</button>
       <button class="pill" data-diff="medium">中等</button>
       <button class="pill" data-diff="hard">困难</button>
@@ -312,7 +302,7 @@ let winner = null;
 let winCells = [];
 let hoverPos = null;
 
-let gameMode = 'pvp';        // 'pvp' | 'pvai' | 'online'
+let gameMode = 'pvai';        // 'pvai' | 'online'
 let difficulty = 'medium';   // 'easy' | 'medium' | 'hard'
 let aiThinking = false;
 let aiTimeoutId = null;
@@ -820,26 +810,16 @@ function undo() {
     return;
   }
 
-  if (gameMode === 'pvai') {
-    // 人机模式：一次撤销两步（AI 的 + 玩家的）
-    if (gameOver || history.length < 2) return;
-    const aiMove = history.pop();
-    grid[aiMove.row][aiMove.col] = EMPTY;
-    const humanMove = history.pop();
-    grid[humanMove.row][humanMove.col] = EMPTY;
-    currentPlayer = humanMove.player; // 回到玩家回合
-    hoverPos = null;
-    updateUI();
-    draw();
-  } else {
-    if (gameOver || history.length === 0) return;
-    const last = history.pop();
-    grid[last.row][last.col] = EMPTY;
-    currentPlayer = last.player;
-    hoverPos = null;
-    updateUI();
-    draw();
-  }
+  // 人机模式：一次撤销两步（AI 的 + 玩家的）
+  if (gameOver || history.length < 2) return;
+  const aiMove = history.pop();
+  grid[aiMove.row][aiMove.col] = EMPTY;
+  const humanMove = history.pop();
+  grid[humanMove.row][humanMove.col] = EMPTY;
+  currentPlayer = humanMove.player;
+  hoverPos = null;
+  updateUI();
+  draw();
 }
 
 function reset() {
@@ -875,16 +855,12 @@ function updateUI() {
   indBlack.classList.toggle('active', blackActive);
   indWhite.classList.toggle('active', whiteActive);
 
-  // 人机模式下更新标签
-  if (gameMode === 'pvai') {
-    labelBlack.textContent = '你';
-    labelWhite.textContent = 'AI';
-  } else if (gameMode === 'online') {
+  if (gameMode === 'online') {
     labelBlack.textContent = onlineRole === 'guest1' ? '你 (Guest 1)' : '对手 (Guest 1)';
     labelWhite.textContent = onlineRole === 'guest2' ? '你 (Guest 2)' : '对手 (Guest 2)';
   } else {
-    labelBlack.textContent = '黑方';
-    labelWhite.textContent = '白方';
+    labelBlack.textContent = '你';
+    labelWhite.textContent = 'AI';
   }
 }
 
@@ -907,15 +883,10 @@ function notifyParent() {
   const textEl = document.getElementById('win-text');
   const detailEl = document.getElementById('win-detail');
 
-  if (gameMode === 'pvai') {
-    if (winner === BLACK) {
-      iconEl.textContent = '🏆'; textEl.textContent = '你赢了！';
-    } else {
-      iconEl.textContent = '🎯'; textEl.textContent = 'AI 获胜';
-    }
+  if (winner === BLACK) {
+    iconEl.textContent = '🏆'; textEl.textContent = '你赢了！';
   } else {
-    iconEl.textContent = '🏆';
-    textEl.textContent = winner === BLACK ? '黑方获胜！' : '白方获胜！';
+    iconEl.textContent = '🎯'; textEl.textContent = 'AI 获胜';
   }
   detailEl.textContent = `共 ${history.length} 手决出胜负`;
   overlay.classList.add('show');
@@ -1074,30 +1045,7 @@ document.getElementById('btn-reset').addEventListener('click', reset);
 document.getElementById('btn-replay').addEventListener('click', reset);
 overlay.addEventListener('click', (e) => { if (e.target === overlay) reset(); });
 
-// ---- 模式切换 ----
-document.getElementById('mode-group').addEventListener('click', (e) => {
-  const pill = e.target.closest('.pill');
-  if (!pill) return;
-  const mode = pill.dataset.mode;
-  if (mode === gameMode) return;
-
-  gameMode = mode;
-  document.querySelectorAll('#mode-group .pill').forEach(p => p.classList.remove('active'));
-  pill.classList.add('active');
-
-  const diffGroup = document.getElementById('diff-group');
-  const diffSep = document.getElementById('diff-sep');
-  if (mode === 'pvai') {
-    diffGroup.style.display = 'flex';
-    diffSep.style.display = 'block';
-  } else {
-    diffGroup.style.display = 'none';
-    diffSep.style.display = 'none';
-  }
-
-  reset();
-});
-
+// ---- 难度切换 ----
 document.getElementById('diff-group').addEventListener('click', (e) => {
   const pill = e.target.closest('.pill');
   if (!pill) return;
@@ -1124,9 +1072,7 @@ window.addEventListener('message', (e) => {
       onlineRole = data.role;        // 'guest1' | 'guest2'
       onlineRoomId = data.roomId;    // 'A' | 'B'
       onlineMyTurn = data.isMyTurn;
-      document.getElementById('mode-group').style.display = 'none';
-      document.getElementById('diff-group').style.display = 'none';
-      document.getElementById('diff-sep').style.display = 'none';
+      document.getElementById('settings-bar').style.display = 'none';
       // Guest 1 执黑
       currentPlayer = BLACK;
       updateUI();

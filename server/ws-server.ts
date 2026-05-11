@@ -1,7 +1,7 @@
 // 五子棋在线对战 WebSocket 服务器 — 端口 3001
 import { WebSocketServer, WebSocket } from "ws";
 import {
-  rooms, resetRoom, BOARD_SIZE, EMPTY, BLACK, WHITE,
+  rooms, resetRoom, writeSummaries, BOARD_SIZE, EMPTY, BLACK, WHITE,
 } from "./room-store";
 
 const PORT = 3001;
@@ -62,6 +62,7 @@ function clearRoom(roomId: string) {
   const room = rooms.get(roomId)!;
   if (room.disbandTimer) { clearTimeout(room.disbandTimer); room.disbandTimer = null; }
   resetRoom(roomId);
+  writeSummaries();
 }
 
 function startDisbandTimer(roomId: string) {
@@ -80,6 +81,7 @@ function startDisbandTimer(roomId: string) {
       return;
     }
     room.countdown = sec;
+    writeSummaries();
     if (room.players[0] && room.players[0].ws) {
       send(room.players[0].ws, { type: "countdown", seconds: sec });
     }
@@ -92,6 +94,7 @@ function startDisbandTimer(roomId: string) {
 const wss = new WebSocketServer({ port: PORT });
 
 wss.on("listening", () => {
+  writeSummaries();
   console.log(`[ws-server] 五子棋 WebSocket 服务器已启动，端口 ${PORT}`);
 });
 
@@ -131,11 +134,13 @@ wss.on("connection", (ws: WebSocket) => {
           room.status = "waiting";
           startDisbandTimer(roomId);
           send(ws, { type: "room-state", state: buildRoomState(roomId, myName) });
+          writeSummaries();
           console.log(`[Room ${roomId}] Guest 1 加入，等待对手...`);
         } else {
           if (room.disbandTimer) { clearInterval(room.disbandTimer); room.disbandTimer = null; }
           room.countdown = null;
           room.status = "playing";
+          writeSummaries();
 
           for (const p of room.players) {
             if (p.ws) send(p.ws, { type: "room-state", state: buildRoomState(roomId, p.name) });
@@ -178,6 +183,7 @@ wss.on("connection", (ws: WebSocket) => {
           room.winner = piecePlayer;
           room.winCells = winResult;
           room.status = "finished";
+          writeSummaries();
 
           for (const p of room.players) {
             if (p.ws) {
@@ -189,6 +195,7 @@ wss.on("connection", (ws: WebSocket) => {
           room.gameOver = true;
           room.winner = null;
           room.status = "finished";
+          writeSummaries();
 
           for (const p of room.players) {
             if (p.ws) send(p.ws, { type: "game-over", winner: "draw", winCells: [] });
@@ -219,6 +226,7 @@ wss.on("connection", (ws: WebSocket) => {
           room.winCells = [];
           room.rematchVotes = new Set();
           room.status = "playing";
+          writeSummaries();
 
           for (const p of room.players) {
             if (p.ws) send(p.ws, { type: "rematch-accepted" });
@@ -231,6 +239,35 @@ wss.on("connection", (ws: WebSocket) => {
             }
           }
           send(ws, { type: "room-state", state: buildRoomState(myRoomId, myName) });
+        }
+        break;
+      }
+
+      case "undo-request": {
+        if (!myRoomId || !myName) return;
+        const room = rooms.get(myRoomId)!;
+        if (room.status !== "playing" || room.gameOver) {
+          send(ws, { type: "error", message: "当前不可悔棋" });
+          return;
+        }
+        if (room.history.length === 0) {
+          send(ws, { type: "error", message: "没有可悔的棋" });
+          return;
+        }
+
+        const lastMove = room.history.pop()!;
+        room.grid[lastMove.row][lastMove.col] = EMPTY;
+        room.currentPlayer = lastMove.player;
+
+        for (const p of room.players) {
+          if (p.ws) {
+            send(p.ws, {
+              type: "undo-applied",
+              row: lastMove.row,
+              col: lastMove.col,
+              turn: room.currentPlayer === BLACK ? "black" : "white",
+            });
+          }
         }
         break;
       }

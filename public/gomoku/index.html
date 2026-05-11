@@ -808,7 +808,17 @@ function placeOpponentPiece(row, col, player) {
 
 function undo() {
   if (aiThinking) return; // AI 思考中不可悔棋
-  if (gameMode === 'online') return; // 在线模式不可悔棋
+
+  if (gameMode === 'online') {
+    if (gameOver) return;
+    if (history.length === 0) return;
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'gomoku-request-undo' }, '*');
+      }
+    } catch (_) {}
+    return;
+  }
 
   if (gameMode === 'pvai') {
     // 人机模式：一次撤销两步（AI 的 + 玩家的）
@@ -833,6 +843,16 @@ function undo() {
 }
 
 function reset() {
+  // 在线模式：发送 rematch 请求走服务器协商流程
+  if (gameMode === 'online') {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'gomoku-request-rematch' }, '*');
+      }
+    } catch (_) {}
+    return;
+  }
+
   cancelAI();
   initGrid();
   resizeCanvas();
@@ -842,12 +862,6 @@ function reset() {
   // 人机模式下玩家执黑先手
   if (gameMode === 'pvai') {
     currentPlayer = BLACK;
-  }
-
-  // 在线模式保留角色和模式
-  if (gameMode === 'online') {
-    currentPlayer = BLACK;
-    onlineMyTurn = onlineRole === 'guest1';
   }
 }
 
@@ -1190,8 +1204,33 @@ window.addEventListener('message', (e) => {
       }
       break;
 
+    case 'gomoku-undo-applied':
+      if (gameMode !== 'online') return;
+      {
+        const lastLocal = history.pop();
+        if (lastLocal) {
+          grid[lastLocal.row][lastLocal.col] = EMPTY;
+        }
+        // 回到对应的回合
+        if (data.turn === 'black') currentPlayer = BLACK;
+        else currentPlayer = WHITE;
+        onlineMyTurn = (
+          (onlineRole === 'guest1' && currentPlayer === BLACK) ||
+          (onlineRole === 'guest2' && currentPlayer === WHITE)
+        );
+        updateUI();
+        draw();
+      }
+      break;
+
     case 'gomoku-rematch-start':
-      reset();
+      // 服务器确认的重新开始，直接重置不经过 postMessage
+      cancelAI();
+      initGrid();
+      resizeCanvas();
+      draw();
+      overlay.classList.remove('show');
+      currentPlayer = BLACK;
       onlineMyTurn = data.isMyTurn;
       updateUI();
       draw();

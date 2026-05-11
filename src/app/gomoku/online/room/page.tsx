@@ -68,6 +68,13 @@ function RoomContent() {
           myTurnRef.current = false;
           break;
         }
+        case "gomoku-request-undo": {
+          const ws = wsRef.current;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "undo-request" }));
+          }
+          break;
+        }
         case "gomoku-request-rematch": {
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
@@ -159,6 +166,20 @@ function RoomContent() {
         setStatus("disbanded");
         postToIframe({ type: "gomoku-room-disbanded" });
         break;
+
+      case "undo-applied": {
+        const isMyTurn =
+          (myName === "Guest 1" && msg.turn === "black") ||
+          (myName === "Guest 2" && msg.turn === "white");
+        myTurnRef.current = isMyTurn;
+        postToIframe({
+          type: "gomoku-undo-applied",
+          row: msg.row as number,
+          col: msg.col as number,
+          turn: msg.turn as string,
+        });
+        break;
+      }
 
       case "rematch-accepted":
         setStatus("playing");

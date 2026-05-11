@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 export default function GomokuPage() {
-  const [mode, setMode] = useState<"pvp" | "pvai">("pvai");
+  const [mode, setMode] = useState<"pvp" | "pvai" | "online">("pvai");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
 
   return (
@@ -47,7 +47,26 @@ export default function GomokuPage() {
           >
             双人对战
           </button>
+          <Link
+            href="/gomoku/online"
+            className={`rounded-xl px-6 py-3 text-sm font-semibold transition-all ${
+              mode === "online"
+                ? "bg-primary-500 text-white shadow-lg shadow-primary-500/25"
+                : "border border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
+            }`}
+          >
+            在线对战
+          </Link>
         </div>
+
+        {/* 在线对战引导 */}
+        {mode === "online" && (
+          <div className="mb-8 text-center">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              与远方的好友实时对弈，点击下方按钮进入房间
+            </p>
+          </div>
+        )}
 
         {/* 难度选择（仅人机模式） */}
         {mode === "pvai" && (
@@ -78,12 +97,21 @@ export default function GomokuPage() {
 
         {/* 开始按钮 */}
         <div className="flex justify-center gap-4">
-          <Link
-            href={`/gomoku/play?mode=${mode}${mode === "pvai" ? `&difficulty=${difficulty}` : ""}`}
-            className="rounded-xl bg-primary-500 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition-all hover:bg-primary-600 hover:-translate-y-0.5"
-          >
-            开始对局
-          </Link>
+          {mode === "online" ? (
+            <Link
+              href="/gomoku/online"
+              className="rounded-xl bg-primary-500 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition-all hover:bg-primary-600 hover:-translate-y-0.5"
+            >
+              进入房间列表
+            </Link>
+          ) : (
+            <Link
+              href={`/gomoku/play?mode=${mode}${mode === "pvai" ? `&difficulty=${difficulty}` : ""}`}
+              className="rounded-xl bg-primary-500 px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition-all hover:bg-primary-600 hover:-translate-y-0.5"
+            >
+              开始对局
+            </Link>
+          )}
           <Link
             href="/gomoku/leaderboard"
             className="rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition-all hover:border-slate-400 hover:-translate-y-0.5 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
@@ -100,6 +128,7 @@ export default function GomokuPage() {
           <li>· 黑方先行，双方轮流在 15x15 棋盘交叉点上落子</li>
           <li>· 先在横、竖、斜任一方向连成五子者获胜</li>
           <li>· 人机对战中，你执黑先行，AI 执白</li>
+          <li>· 在线对战中，先进房间者为 Guest 1（黑方先行）</li>
           <li>· 支持悔棋（Ctrl+Z），人机模式一次撤销两步</li>
           <li>· 游戏结束后可将成绩提交到排行榜</li>
         </ul>

@@ -1,10 +1,18 @@
-import { getRoomSummary, type RoomSummary } from "@/../server/room-store";
+import { readFileSync } from "fs";
+import { join } from "path";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const rooms: RoomSummary[] = [
-    getRoomSummary("A"),
-    getRoomSummary("B"),
-  ];
-
-  return Response.json(rooms);
+  try {
+    const filePath = join(process.cwd(), "server", "room-summaries.json");
+    const raw = readFileSync(filePath, "utf-8");
+    const rooms = JSON.parse(raw);
+    return Response.json(rooms);
+  } catch {
+    return Response.json([
+      { roomId: "A", status: "empty", playerCount: 0, countdown: null },
+      { roomId: "B", status: "empty", playerCount: 0, countdown: null },
+    ]);
+  }
 }

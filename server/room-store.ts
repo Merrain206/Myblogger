@@ -1,5 +1,11 @@
 // 五子棋在线对战 — 共享状态存储
 // 由 ws-server.ts 写入，由 API route 读取
+// 跨进程共享：ws-server 写入 room-summaries.json，API route 读取该文件
+
+import { writeFileSync } from "fs";
+import { join } from "path";
+
+const SUMMARIES_FILE = join(__dirname, "room-summaries.json");
 
 export const BOARD_SIZE = 15;
 export const EMPTY = 0, BLACK = 1, WHITE = 2;
@@ -81,4 +87,12 @@ export function resetRoom(roomId: string) {
     rematchVotes: new Set(),
     countdown: null,
   });
+}
+
+export function writeSummaries() {
+  const summaries: RoomSummary[] = [
+    getRoomSummary("A"),
+    getRoomSummary("B"),
+  ];
+  writeFileSync(SUMMARIES_FILE, JSON.stringify(summaries), "utf-8");
 }

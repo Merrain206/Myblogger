@@ -15,7 +15,7 @@ const RESULT_COLORS: Record<string, string> = {
 export default function LeaderboardPage() {
   const [scores, setScores] = useState<ScoreEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterMode, setFilterMode] = useState<"all" | "pvai" | "pvp">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "pvai">("all");
   const [filterDiff, setFilterDiff] = useState<"all" | "easy" | "medium" | "hard">("all");
 
   const fetchScores = () => {
@@ -43,7 +43,7 @@ export default function LeaderboardPage() {
       {/* 过滤器 */}
       <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
         <div className="flex rounded-lg border border-slate-200 overflow-hidden dark:border-slate-700">
-          {(["all", "pvai", "pvp"] as const).map((m) => (
+          {(["all", "pvai"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setFilterMode(m)}
@@ -53,7 +53,7 @@ export default function LeaderboardPage() {
                   : "bg-white text-slate-500 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-400"
               }`}
             >
-              {{ all: "全部", pvai: "人机", pvp: "双人" }[m]}
+              {{ all: "全部", pvai: "人机" }[m]}
             </button>
           ))}
         </div>
@@ -108,7 +108,7 @@ export default function LeaderboardPage() {
                   <td className="px-4 py-3 font-mono text-xs text-slate-400">{i + 1}</td>
                   <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{entry.playerName}</td>
                   <td className="px-4 py-3 text-center text-slate-500 dark:text-slate-400">
-                    {entry.mode === "pvai" ? "人机" : "双人"}
+                    {entry.mode === "pvai" ? "人机" : "在线"}
                   </td>
                   <td className="px-4 py-3 text-center text-slate-500 dark:text-slate-400">
                     {entry.difficulty ? DIFF_LABELS[entry.difficulty] : "-"}

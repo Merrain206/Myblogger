@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 export default function GomokuPage() {
-  const [mode, setMode] = useState<"pvp" | "pvai" | "online">("pvai");
+  const [mode, setMode] = useState<"pvai" | "online">("pvai");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
 
   return (
@@ -36,16 +36,6 @@ export default function GomokuPage() {
             }`}
           >
             人机对战
-          </button>
-          <button
-            onClick={() => setMode("pvp")}
-            className={`rounded-xl px-6 py-3 text-sm font-semibold transition-all ${
-              mode === "pvp"
-                ? "bg-primary-500 text-white shadow-lg shadow-primary-500/25"
-                : "border border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400"
-            }`}
-          >
-            双人对战
           </button>
           <Link
             href="/gomoku/online"

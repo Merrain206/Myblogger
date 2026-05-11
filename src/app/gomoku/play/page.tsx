@@ -7,7 +7,7 @@ import type { GameResult } from "@/lib/gomoku/types";
 function PlayContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const mode = (searchParams.get("mode") || "pvai") as "pvp" | "pvai";
+  const mode = (searchParams.get("mode") || "pvai") as "pvai";
   const difficulty = (searchParams.get("difficulty") || "medium") as "easy" | "medium" | "hard";
 
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
@@ -65,7 +65,7 @@ function PlayContent() {
 
   const gameUrl = `/gomoku/index.html?mode=${mode}&difficulty=${difficulty}`;
 
-  if (mode !== "pvp" && mode !== "pvai") {
+  if (mode !== "pvai") {
     return (
       <div className="text-center py-20">
         <p className="text-slate-500 dark:text-slate-400">无效的游戏模式</p>
@@ -85,7 +85,7 @@ function PlayContent() {
           ← 返回大厅
         </button>
         <span className="text-xs text-slate-400 dark:text-slate-500">
-          {mode === "pvai" ? `人机对战 · ${({ easy: "简单", medium: "中等", hard: "困难" } as const)[difficulty]}` : "双人对战"}
+          {`人机对战 · ${({ easy: "简单", medium: "中等", hard: "困难" } as const)[difficulty]}`}
         </span>
         <div className="w-16" /> {/* 占位保持居中 */}
       </div>

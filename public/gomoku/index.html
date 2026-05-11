@@ -312,10 +312,13 @@ let winner = null;
 let winCells = [];
 let hoverPos = null;
 
-let gameMode = 'pvp';        // 'pvp' | 'pvai'
+let gameMode = 'pvp';        // 'pvp' | 'pvai' | 'online'
 let difficulty = 'medium';   // 'easy' | 'medium' | 'hard'
 let aiThinking = false;
 let aiTimeoutId = null;
+let onlineMyTurn = false;    // online 模式下是否轮到本玩家
+let onlineRole = null;       // 'guest1' | 'guest2' | null
+let onlineRoomId = null;     // 'A' | 'B' | null
 
 const DIFFICULTY_DEPTH = { easy: 0, medium: 4, hard: 6 };
 const DIFFICULTY_NOISE = { easy: 4, medium: 0, hard: 0 }; // top-N random pick (easy only)
@@ -735,23 +738,21 @@ function scheduleAI() {
   }, 200); // 短暂延迟让 UI 反馈可见
 }
 
-// ---- 操作 ----
-function placePiece(row, col) {
-  if (gameOver) return false;
-  if (grid[row][col] !== EMPTY) return false;
+// ---- 核心落子（供本地和网络消息复用）----
+function doPlacePiece(row, col, player) {
+  grid[row][col] = player;
+  history.push({ row, col, player });
 
-  grid[row][col] = currentPlayer;
-  history.push({ row, col, player: currentPlayer });
-
-  const winResult = checkWin(row, col, currentPlayer);
+  const winResult = checkWin(row, col, player);
   if (winResult) {
     gameOver = true;
-    winner = currentPlayer;
+    winner = player;
     winCells = winResult;
     cancelAI();
     updateUI();
     draw();
-    showWinDialog();
+    // 在线模式等服务器通知，不本地弹窗
+    if (gameMode !== 'online') showWinDialog();
     return true;
   }
 
@@ -761,7 +762,7 @@ function placePiece(row, col) {
     cancelAI();
     updateUI();
     draw();
-    showDrawDialog();
+    if (gameMode !== 'online') showDrawDialog();
     return true;
   }
 
@@ -769,7 +770,6 @@ function placePiece(row, col) {
   updateUI();
   draw();
 
-  // AI 回合
   if (gameMode === 'pvai' && currentPlayer === WHITE && !gameOver) {
     scheduleAI();
   }
@@ -777,8 +777,38 @@ function placePiece(row, col) {
   return true;
 }
 
+// ---- 操作 ----
+function placePiece(row, col) {
+  if (gameOver) return false;
+  if (grid[row][col] !== EMPTY) return false;
+
+  // 在线模式：发送落子给父页面（WebSocket 转发给服务器）
+  if (gameMode === 'online') {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'gomoku-move', row, col }, '*');
+      }
+    } catch (_) {}
+    // 本地也执行，等服务器确认
+    return doPlacePiece(row, col, currentPlayer);
+  }
+
+  return doPlacePiece(row, col, currentPlayer);
+}
+
+// 在线模式：接收对手落子
+function placeOpponentPiece(row, col, player) {
+  if (gameOver) {
+    // 游戏已结束，重置再放
+    return false;
+  }
+  if (grid[row][col] !== EMPTY) return false;
+  return doPlacePiece(row, col, player);
+}
+
 function undo() {
   if (aiThinking) return; // AI 思考中不可悔棋
+  if (gameMode === 'online') return; // 在线模式不可悔棋
 
   if (gameMode === 'pvai') {
     // 人机模式：一次撤销两步（AI 的 + 玩家的）
@@ -813,6 +843,12 @@ function reset() {
   if (gameMode === 'pvai') {
     currentPlayer = BLACK;
   }
+
+  // 在线模式保留角色和模式
+  if (gameMode === 'online') {
+    currentPlayer = BLACK;
+    onlineMyTurn = onlineRole === 'guest1';
+  }
 }
 
 // ---- UI 更新 ----
@@ -829,6 +865,9 @@ function updateUI() {
   if (gameMode === 'pvai') {
     labelBlack.textContent = '你';
     labelWhite.textContent = 'AI';
+  } else if (gameMode === 'online') {
+    labelBlack.textContent = onlineRole === 'guest1' ? '你 (Guest 1)' : '对手 (Guest 1)';
+    labelWhite.textContent = onlineRole === 'guest2' ? '你 (Guest 2)' : '对手 (Guest 2)';
   } else {
     labelBlack.textContent = '黑方';
     labelWhite.textContent = '白方';
@@ -989,6 +1028,7 @@ function drawStone(x, y, player) {
 canvas.addEventListener('click', (e) => {
   if (gameOver || aiThinking) return;
   if (gameMode === 'pvai' && currentPlayer === WHITE) return; // AI 回合
+  if (gameMode === 'online' && !onlineMyTurn) return; // 等待对手落子
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvasSize / rect.width, scaleY = canvasSize / rect.height;
   const px = (e.clientX - rect.left) * scaleX, py = (e.clientY - rect.top) * scaleY;
@@ -999,6 +1039,7 @@ canvas.addEventListener('click', (e) => {
 canvas.addEventListener('mousemove', (e) => {
   if (gameOver || aiThinking) return;
   if (gameMode === 'pvai' && currentPlayer === WHITE) return;
+  if (gameMode === 'online' && !onlineMyTurn) return;
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvasSize / rect.width, scaleY = canvasSize / rect.height;
   const px = (e.clientX - rect.left) * scaleX, py = (e.clientY - rect.top) * scaleY;
@@ -1058,10 +1099,124 @@ document.getElementById('diff-group').addEventListener('click', (e) => {
 
 window.addEventListener('resize', () => { resizeCanvas(); draw(); });
 
+// ---- 在线模式：接收父页面消息 ----
+window.addEventListener('message', (e) => {
+  const data = e.data;
+  if (!data || !data.type) return;
+
+  switch (data.type) {
+    case 'gomoku-setup':
+      gameMode = 'online';
+      onlineRole = data.role;        // 'guest1' | 'guest2'
+      onlineRoomId = data.roomId;    // 'A' | 'B'
+      onlineMyTurn = data.isMyTurn;
+      document.getElementById('mode-group').style.display = 'none';
+      document.getElementById('diff-group').style.display = 'none';
+      document.getElementById('diff-sep').style.display = 'none';
+      // Guest 1 执黑
+      currentPlayer = BLACK;
+      updateUI();
+      draw();
+      break;
+
+    case 'gomoku-opponent-move':
+      if (gameMode !== 'online') return;
+      {
+        const oppPlayer = onlineRole === 'guest1' ? WHITE : BLACK;
+        placeOpponentPiece(data.row, data.col, oppPlayer);
+        onlineMyTurn = true;
+        updateUI();
+      }
+      break;
+
+    case 'gomoku-game-over':
+      if (gameMode !== 'online') return;
+      {
+        const winnerColor = data.winner === 'black' ? BLACK : data.winner === 'white' ? WHITE : null;
+        gameOver = true;
+        winner = winnerColor;
+        winCells = data.winCells || [];
+        onlineMyTurn = false;
+        updateUI();
+        draw();
+        // 高亮获胜连线
+        if (winnerColor !== null && winCells.length >= 5) {
+          const iconEl = document.getElementById('win-icon');
+          const textEl = document.getElementById('win-text');
+          const detailEl = document.getElementById('win-detail');
+          const isMeWin = (
+            (onlineRole === 'guest1' && winnerColor === BLACK) ||
+            (onlineRole === 'guest2' && winnerColor === WHITE)
+          );
+          iconEl.textContent = isMeWin ? '🏆' : '🎯';
+          textEl.textContent = isMeWin ? '你赢了！' : '对手获胜';
+          detailEl.textContent = `共 ${history.length} 手决出胜负`;
+          overlay.classList.add('show');
+        } else if (winnerColor === null) {
+          document.getElementById('win-icon').textContent = '🤝';
+          document.getElementById('win-text').textContent = '平局';
+          document.getElementById('win-detail').textContent = '棋盘已满，双方握手言和';
+          overlay.classList.add('show');
+        }
+      }
+      break;
+
+    case 'gomoku-opponent-left':
+      if (gameMode !== 'online') return;
+      onlineMyTurn = false;
+      gameOver = true;
+      updateUI();
+      draw();
+      {
+        const iconEl = document.getElementById('win-icon');
+        iconEl.textContent = '🚪';
+        document.getElementById('win-text').textContent = '对手离开';
+        document.getElementById('win-detail').textContent = '对方已离开房间';
+        overlay.classList.add('show');
+      }
+      break;
+
+    case 'gomoku-room-disbanded':
+      if (gameMode !== 'online') return;
+      onlineMyTurn = false;
+      gameOver = true;
+      updateUI();
+      draw();
+      {
+        document.getElementById('win-icon').textContent = '⏰';
+        document.getElementById('win-text').textContent = '房间已解散';
+        document.getElementById('win-detail').textContent = '等待超时，无人加入';
+        overlay.classList.add('show');
+      }
+      break;
+
+    case 'gomoku-rematch-start':
+      reset();
+      onlineMyTurn = data.isMyTurn;
+      updateUI();
+      draw();
+      break;
+  }
+});
+
 // ---- 启动 ----
 initGrid();
 resizeCanvas();
 draw();
+
+// ---- 检测 URL 参数中是否有 roomId，若有则通知父页面准备在线模式 ----
+(function checkOnlineMode() {
+  const params = new URLSearchParams(window.location.search);
+  const roomId = params.get('roomId');
+  if (roomId) {
+    // 通知父页面此 iframe 已准备好
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'gomoku-ready', roomId }, '*');
+      }
+    } catch (_) {}
+  }
+})();
 
 })();
 </script>

@@ -11,9 +11,28 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   const project = getProjectBySlug(slug);
   if (!project) return { title: "项目未找到" };
+  const url = `https://merrain.cn/projects/${project.slug}`;
   return {
     title: project.title,
     description: project.description,
+    keywords: project.techStack,
+    openGraph: {
+      type: "article",
+      locale: "zh_CN",
+      siteName: "Merrain's Blog",
+      title: project.title,
+      description: project.description,
+      url,
+      images: project.imageUrl
+        ? [{ url: project.imageUrl, width: 1200, height: 630, alt: project.title }]
+        : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: project.title,
+      description: project.description,
+      images: project.imageUrl ? [project.imageUrl] : [],
+    },
   };
 }
 

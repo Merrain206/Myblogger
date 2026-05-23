@@ -3,6 +3,8 @@ import { getPostBySlug, getAdjacentPosts } from "@/lib/posts";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import { MDXComponents } from "@/components/MDXComponents";
 import TOC from "@/components/TOC";
+import ReadingProgress from "@/components/ReadingProgress";
+import GiscusComments from "@/components/GiscusComments";
 import Link from "next/link";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -18,9 +20,35 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   const post = getPostBySlug(slug);
   if (!post) return { title: "未找到文章" };
+  const url = `https://merrain.cn/blog/${post.slug}`;
   return {
     title: post.title,
     description: post.summary,
+    keywords: post.tags,
+    authors: [{ name: "Merrain" }],
+    openGraph: {
+      type: "article",
+      locale: "zh_CN",
+      siteName: "Merrain's Blog",
+      title: post.title,
+      description: post.summary,
+      url,
+      publishedTime: post.date,
+      modifiedTime: post.date,
+      section: post.category,
+      tags: post.tags,
+      images: post.cover
+        ? [{ url: post.cover, width: 1200, height: 630, alt: post.title }]
+        : ["/opengraph-image"],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: post.summary,
+      images: post.cover
+        ? [post.cover]
+        : ["/opengraph-image"],
+    },
   };
 }
 
@@ -51,6 +79,7 @@ export default async function PostPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
+      <ReadingProgress />
       <div className="lg:flex lg:gap-10">
         {/* Article */}
         <article className="min-w-0 flex-1">
@@ -77,7 +106,17 @@ export default async function PostPage({ params }: PageProps) {
               {post.tags.length > 0 && (
                 <>
                   <span>&middot;</span>
-                  <span>{post.tags.map((t: string) => `#${t}`).join(" ")}</span>
+                  <span className="flex flex-wrap gap-1">
+                    {post.tags.map((t: string) => (
+                      <Link
+                        key={t}
+                        href={`/tags/${encodeURIComponent(t)}`}
+                        className="text-primary-500 hover:text-primary-600"
+                      >
+                        #{t}
+                      </Link>
+                    ))}
+                  </span>
                 </>
               )}
             </div>
@@ -126,6 +165,8 @@ export default async function PostPage({ params }: PageProps) {
               <div />
             )}
           </nav>
+          {/* Comments */}
+          <GiscusComments />
         </article>
 
         {/* TOC */}

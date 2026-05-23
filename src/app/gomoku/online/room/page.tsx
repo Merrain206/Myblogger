@@ -9,7 +9,7 @@ function RoomContent() {
   const roomId = (searchParams.get("room") || "A") as "A" | "B";
 
   const [status, setStatus] = useState<
-    "connecting" | "waiting" | "playing" | "finished" | "disbanded"
+    "connecting" | "waiting" | "playing" | "finished" | "disbanded" | "reconnecting"
   >("connecting");
   const [myName, setMyName] = useState("");
   const [opponentName, setOpponentName] = useState("");
@@ -23,6 +23,7 @@ function RoomContent() {
   const wsRef = useRef<WebSocket | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const myTurnRef = useRef(false);
+  const myNameRef = useRef("");
 
   const postToIframe = useCallback((msg: object) => {
     if (iframeRef.current?.contentWindow) {
@@ -30,24 +31,56 @@ function RoomContent() {
     }
   }, []);
 
-  // WebSocket 连接
+  const reconnectCount = useRef(0);
+  const letDisband = useRef(false); // 服务器主动解散时置 true，阻止重连
+  const MAX_RECONNECT = 3;
+
+  // WebSocket 连接（含重连）
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.hostname}/ws`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    let stopped = false;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join-room", roomId }));
+    function connect() {
+      if (stopped) return;
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.hostname}/ws`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        reconnectCount.current = 0;
+        ws.send(JSON.stringify({ type: "join-room", roomId }));
+      };
+
+      ws.onmessage = (event) => {
+        try { handleServerMessage(JSON.parse(event.data)); } catch { /* ignore */ }
+      };
+
+      ws.onclose = () => {
+        if (stopped || letDisband.current) return;
+        if (reconnectCount.current < MAX_RECONNECT) {
+          reconnectCount.current++;
+          setStatus("reconnecting");
+          setTimeout(connect, 1500);
+        } else {
+          setStatus("disbanded");
+        }
+      };
+
+      ws.onerror = () => {
+        // onerror 之后会触发 onclose，由 onclose 处理重连
+      };
+    }
+
+    connect();
+
+    return () => {
+      stopped = true;
+      if (wsRef.current) {
+        wsRef.current.onclose = null; // 阻止重连
+        wsRef.current.close();
+      }
     };
-
-    ws.onmessage = (event) => {
-      try { handleServerMessage(JSON.parse(event.data)); } catch { /* ignore */ }
-    };
-
-    ws.onclose = () => setStatus("disbanded");
-
-    return () => { ws.close(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
@@ -100,7 +133,7 @@ function RoomContent() {
           currentTurn: string;
         };
 
-        if (state.yourName) setMyName(state.yourName);
+        if (state.yourName) { setMyName(state.yourName); myNameRef.current = state.yourName; }
         const opp = state.players.find(p => p.name !== state.yourName);
         if (opp) setOpponentName(opp.name);
 
@@ -146,8 +179,8 @@ function RoomContent() {
           setGameResult({ winner: "draw", msg: "握手言和" });
         } else {
           const iWon =
-            (myName === "Guest 1" && winner === "black") ||
-            (myName === "Guest 2" && winner === "white");
+            (myNameRef.current === "Guest 1" && winner === "black") ||
+            (myNameRef.current === "Guest 2" && winner === "white");
           setGameResult({
             winner: iWon ? "win" : "loss",
             msg: iWon ? "你赢了！" : "对手获胜",
@@ -163,14 +196,15 @@ function RoomContent() {
         break;
 
       case "room-disbanded":
+        letDisband.current = true;
         setStatus("disbanded");
         postToIframe({ type: "gomoku-room-disbanded" });
         break;
 
       case "undo-applied": {
         const isMyTurn =
-          (myName === "Guest 1" && msg.turn === "black") ||
-          (myName === "Guest 2" && msg.turn === "white");
+          (myNameRef.current === "Guest 1" && msg.turn === "black") ||
+          (myNameRef.current === "Guest 2" && msg.turn === "white");
         myTurnRef.current = isMyTurn;
         postToIframe({
           type: "gomoku-undo-applied",
@@ -185,7 +219,7 @@ function RoomContent() {
         setStatus("playing");
         setGameResult(null);
         setRematchRequested(false);
-        myTurnRef.current = myName === "Guest 1";
+        myTurnRef.current = myNameRef.current === "Guest 1";
         postToIframe({
           type: "gomoku-rematch-start",
           isMyTurn: myName === "Guest 1",
@@ -211,7 +245,7 @@ function RoomContent() {
     router.push("/gomoku/online");
   }
 
-  const gameUrl = `/gomoku/index.html?roomId=${roomId}`;
+  const gameUrl = `/gomoku/index.html?roomId=${roomId}&v=3`;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10">
@@ -244,6 +278,11 @@ function RoomContent() {
         {status === "playing" && (
           <span className="rounded-full bg-emerald-100 px-4 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
             对局中 · 你 ({myName}) vs 对手 ({opponentName})
+          </span>
+        )}
+        {status === "reconnecting" && (
+          <span className="rounded-full bg-orange-100 px-4 py-1 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+            连接断开，正在重连...
           </span>
         )}
         {status === "disbanded" && (

@@ -17,7 +17,7 @@ export default function Home() {
             <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl dark:text-slate-100">
               你好，我是
               <span className="bg-gradient-to-r from-primary-500 to-primary-700 bg-clip-text text-transparent">
-                {" "}开发者
+                {" "}Merrain！
               </span>
             </h1>
             <p className="mb-8 text-lg leading-relaxed text-slate-500 dark:text-slate-400">

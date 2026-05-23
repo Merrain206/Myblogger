@@ -3,7 +3,24 @@ import { projects } from "@/content/projects";
 
 export const metadata = {
   title: "项目",
-  description: "我参与和构建的项目。",
+  description:
+    "课堂 AI 领航员、五子棋 AI、机器人足球策略等全栈项目展示，涵盖 Python、Next.js、WebSocket 等技术。",
+  keywords: [
+    "项目",
+    "全栈",
+    "Python",
+    "Next.js",
+    "AI",
+    "WebSocket",
+    "五子棋",
+    "机器人足球",
+  ],
+  openGraph: {
+    title: "项目 | Merrain's Blog",
+    description:
+      "课堂 AI 领航员、五子棋 AI、机器人足球策略等全栈项目展示，涵盖 Python、Next.js、WebSocket 等技术。",
+    url: "https://merrain.cn/projects",
+  },
 };
 
 export default function ProjectsPage() {

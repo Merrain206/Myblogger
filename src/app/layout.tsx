@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import BackToTop from "@/components/BackToTop";
 import "@/styles/globals.css";
 
 const inter = Inter({
@@ -11,15 +12,49 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://merrain.cn"),
   title: {
-    default: "MyBlog - 个人博客",
-    template: "%s | MyBlog",
+    default: "Merrain's Blog - 个人博客",
+    template: "%s | Merrain's Blog",
   },
-  description: "一个使用 Next.js + MDX 构建的个人博客，分享技术与生活。",
+  description:
+    "热爱编程与探索，分享技术心得、项目经验与生活感悟。基于 Next.js + MDX 构建。",
+  keywords: [
+    "博客",
+    "技术",
+    "编程",
+    "前端",
+    "后端",
+    "Python",
+    "Next.js",
+    "React",
+    "五子棋",
+    "AI",
+    "Linux",
+  ],
+  authors: [{ name: "Merrain" }],
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
   openGraph: {
     type: "website",
     locale: "zh_CN",
-    siteName: "MyBlog",
+    siteName: "Merrain's Blog",
+    title: "Merrain's Blog - 个人博客",
+    description:
+      "热爱编程与探索，分享技术心得、项目经验与生活感悟。基于 Next.js + MDX 构建。",
+    url: "https://merrain.cn",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Merrain's Blog - 个人博客",
+    description:
+      "热爱编程与探索，分享技术心得、项目经验与生活感悟。基于 Next.js + MDX 构建。",
   },
 };
 
@@ -44,6 +79,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Navbar />
           <main className="flex-1">{children}</main>
           <Footer />
+          <BackToTop />
         </div>
       </body>
     </html>

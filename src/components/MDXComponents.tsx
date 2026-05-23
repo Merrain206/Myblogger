@@ -30,7 +30,7 @@ function CopyButton({ code }: { code: string }) {
   );
 }
 
-function CodeBlock({ children, className, ...props }: React.HTMLAttributes<HTMLElement>) {
+function CodeBlock({ children, className, ...props }: React.HTMLAttributes<HTMLElement> & { "data-language"?: string }) {
   const codeRef = useRef<HTMLElement>(null);
   const [code, setCode] = useState("");
 
@@ -40,13 +40,14 @@ function CodeBlock({ children, className, ...props }: React.HTMLAttributes<HTMLE
     }
   }, []);
 
-  const isBlock = className?.includes("language-");
+  const dataLanguage = props["data-language"];
+  const isBlock = Boolean(dataLanguage) || className?.includes("language-");
 
   if (isBlock) {
     return (
       <div className="group relative my-6">
         <pre className="overflow-x-auto rounded-xl bg-slate-900 p-4 text-sm leading-relaxed text-slate-100" {...props}>
-          <code ref={codeRef} className={className} />
+          <code ref={codeRef} className={className}>{children}</code>
         </pre>
         <CopyButton code={code} />
       </div>
@@ -57,7 +58,7 @@ function CodeBlock({ children, className, ...props }: React.HTMLAttributes<HTMLE
     <code
       className="rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-800 dark:bg-slate-700 dark:text-slate-200"
       {...props}
-    />
+    >{children}</code>
   );
 }
 

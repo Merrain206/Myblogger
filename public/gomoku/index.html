@@ -779,7 +779,7 @@ function placePiece(row, col) {
         window.parent.postMessage({ type: 'gomoku-move', row, col }, '*');
       }
     } catch (_) {}
-    // 本地也执行，等服务器确认
+    onlineMyTurn = false; // 落子后禁止己方继续操作，等待对手回应
     return doPlacePiece(row, col, currentPlayer);
   }
 

@@ -5,6 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 语言规范
 与用户的对话、代码注释以及思考过程均使用中文。
 
+## 行为规则
+
+1. **自动同步到云服务器**：每次修改项目代码后（不含 .md 文档、不含 .git/），完成构建验证通过后，自动通过 SCP 将变更文件同步到云服务器（82.157.193.186），执行 `npm run build` 并重启 PM2 进程。
+2. **Git 推送需用户确认**：**禁止**主动执行 `git push`，该命令只能由用户本人明确发出后才可执行。`git add` 和 `git commit` 也不主动执行，除非用户要求。
+
 ## 项目概述
 
 基于 Next.js 15 + MDX 的个人博客系统，集成了五子棋小游戏。
@@ -109,6 +114,7 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 
 | 项目 | 值 |
 |------|-----|
+| 域名 | **merrain.cn** / **www.merrain.cn** |
 | IP | 82.157.193.186 |
 | 系统 | Ubuntu 22.04 LTS |
 | 配置 | 2核2G 4M带宽 50GB SSD |
@@ -116,8 +122,10 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 | SSH 密钥 | `~/.ssh/tmp/myblogger_key` (RSA 2048) |
 | SSH 连接 | `ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186` |
 | 项目路径 | `/home/ubuntu/myblogger` |
-| Web 服务 | Nginx (80) → Next.js (3000) |
+| Web 服务 | Nginx (80/443) → Next.js (3000)，HTTP 自动跳转 HTTPS |
+| SSL 证书 | Let's Encrypt，自动续期，certbot 管理 |
 | 进程管理 | PM2 |
+| DNS 托管 | 腾讯云 DNSPod |
 
 ### PM2 进程
 

@@ -7,9 +7,12 @@ import type { Post, PostMeta } from "./types";
 const postsDirectory = path.join(process.cwd(), "src/content/posts");
 
 function getReadingTime(content: string): number {
-  const wordsPerMinute = 200;
-  const words = content.trim().split(/\s+/).length;
-  return Math.ceil(words / wordsPerMinute);
+  const charsPerMinute = 500; // 中文阅读速度约 400-600 字/分钟
+  // 去除代码块和空白，只计算有效字符
+  const text = content
+    .replace(/```[\s\S]*?```/g, "") // 去代码块
+    .replace(/\s+/g, "");           // 去空白
+  return Math.max(1, Math.ceil(text.length / charsPerMinute));
 }
 
 function parsePost(fileName: string): Post | null {

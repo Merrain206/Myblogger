@@ -2,86 +2,380 @@
 title: "使用 Next.js + MDX 构建个人博客"
 date: "2026-05-01"
 category: "前端"
-tags: ["Next.js", "MDX", "博客", "React"]
-summary: "从零开始，使用 Next.js App Router 和 MDX 搭建一个功能完善的个人博客系统。"
+tags: ["Next.js", "MDX", "博客", "React", "Tailwind CSS", "SEO"]
+summary: "从零开始，使用 Next.js 15 App Router + MDX 搭建功能完善的个人博客，涵盖文章解析、代码高亮、全文搜索、暗色模式和 SEO 优化。"
 ---
 
 ## 为什么选择 Next.js + MDX
 
-在构建个人博客时，我们需要考虑几个关键因素：
+搭建个人博客，方案多如牛毛——WordPress、Hexo、Hugo、Gatsby……但如果你是一个 React 开发者，想要完全掌控博客的每一行代码，Next.js + MDX 是理想组合。原因很简单：
 
-1. **SEO 友好** — 博客需要被搜索引擎收录
-2. **写作体验** — Markdown/MDX 是最佳选择
-3. **性能** — 页面加载速度要快
-4. **灵活性** — 可以自定义组件和样式
+1. **SEO 友好** — Next.js 的 RSC（React Server Components）天然支持 SSR，搜索引擎能直接抓取渲染后的 HTML，不需要额外的 SEO 插件
+2. **写作体验** — MDX 在 Markdown 基础上支持嵌入 React 组件，写文章就像写 JSX，自由度远超纯 Markdown
+3. **性能极致** — App Router 默认服务端组件，零客户端 JS 的静态页面，Lighthouse 轻松满分
+4. **灵活可控** — 文件系统即数据库，Markdown 文件直接放在 `src/content/posts/` 下，Git 版本管理天然自带
 
-Next.js 的 App Router 提供了优秀的 SSR/SSG 能力，配合 MDX 可以在 Markdown 中直接使用 React 组件，非常强大。
+下面按实际搭建顺序，把每个环节的关键代码和踩坑点都讲清楚。
+
+## 项目初始化
+
+```bash
+npx create-next-app@latest myblogger --typescript --tailwind --app
+cd myblogger
+npm install gray-matter @next/mdx next-mdx-remote
+npm install rehype-pretty-code shiki remark-gfm
+npm install fuse.js date-fns
+```
+
+核心依赖各司其职：
+
+| 依赖 | 作用 |
+|------|------|
+| `gray-matter` | 解析 MDX 文件的 frontmatter（标题、日期、标签等） |
+| `@next/mdx` + `next-mdx-remote` | 在 RSC 中渲染 MDX 内容 |
+| `rehype-pretty-code` + `shiki` | 代码块语法高亮，基于 TextMate 语法 |
+| `remark-gfm` | 支持 GitHub 风格 Markdown（表格、任务列表等） |
+| `fuse.js` | 客户端全文搜索，模糊匹配，零配置 |
+| `date-fns` | 日期格式化，tree-shakable，按需引入 |
 
 ## 项目结构
-
-一个典型的博客项目结构如下：
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx
-│   ├── page.tsx
+│   ├── layout.tsx              # 根布局：导航栏 + 页脚 + 暗色模式脚本
+│   ├── page.tsx                # 首页：文章列表 + 项目展示
 │   └── blog/
-│       ├── page.tsx
-│       └── [slug]/page.tsx
-├── content/posts/
+│       ├── page.tsx            # 博客列表页：搜索 + 分类/标签过滤
+│       └── [slug]/page.tsx     # 文章详情页：动态路由 + MDX 渲染
+├── content/
+│   └── posts/                  # .mdx 文章文件，文件名即 slug
 ├── components/
-└── lib/
-    └── posts.ts
+│   ├── Navbar.tsx              # 导航栏 + 暗色模式切换
+│   ├── PostCard.tsx            # 文章卡片
+│   ├── SearchBar.tsx           # 搜索栏（防抖 300ms）
+│   ├── TagFilter.tsx           # 标签过滤
+│   ├── TOC.tsx                 # 文章目录（IntersectionObserver 滚动追踪）
+│   └── MDXComponents.tsx       # MDX 自定义组件映射
+├── lib/
+│   ├── posts.ts                # 文章加载、解析、搜索、过滤逻辑
+│   └── types.ts                # Post、Project 类型定义
+└── styles/
+    └── globals.css             # Tailwind 指令 + @tailwindcss/typography
 ```
 
 ## 核心实现
 
-### 文章解析
+### 1. 文章解析
 
-使用 `gray-matter` 解析 Markdown 文件中的 frontmatter：
+`gray-matter` 解析 frontmatter 后返回 `data`（元数据）和 `content`（正文 Markdown）。文章以 `.mdx` 文件存放在 `src/content/posts/`，文件名即 URL slug：
 
 ```typescript
+// src/lib/posts.ts
 import matter from "gray-matter";
 import fs from "fs";
+import path from "path";
 
-function parsePost(fileName: string) {
-  const fileContents = fs.readFileSync(fullPath, "utf8");
-  const { data, content } = matter(fileContents);
-  return { slug, content, ...data };
+const postsDir = path.join(process.cwd(), "src/content/posts");
+
+export function getAllPosts(): Post[] {
+  const filenames = fs.readdirSync(postsDir);
+  const posts = filenames
+    .filter((f) => f.endsWith(".mdx"))
+    .map((filename) => {
+      const slug = filename.replace(/\.mdx$/, "");
+      const fullPath = path.join(postsDir, filename);
+      const fileContents = fs.readFileSync(fullPath, "utf8");
+      const { data, content } = matter(fileContents);
+
+      return {
+        slug,
+        content,
+        title: data.title,
+        date: data.date,
+        category: data.category,
+        tags: data.tags || [],
+        summary: data.summary || "",
+      } as Post;
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  return posts;
+}
+
+export function getPostBySlug(slug: string): Post | null {
+  return getAllPosts().find((p) => p.slug === slug) || null;
 }
 ```
 
-### MDX 渲染
+关键点是 `process.cwd()` —— Next.js 中它指向项目根目录，用来拼接出 `postsDir` 的绝对路径，避免相对路径在服务端组件中解析出错。
 
-使用 `next-mdx-remote` 在服务端渲染 MDX 内容：
+### 2. 动态路由
+
+App Router 通过文件夹命名约定实现动态路由。`src/app/blog/[slug]/page.tsx` 中的 `[slug]` 自动匹配 URL 中的文章标识：
 
 ```typescript
+// src/app/blog/[slug]/page.tsx
+import { getPostBySlug, getAdjacentPosts } from "@/lib/posts";
 import { MDXRemote } from "next-mdx-remote/rsc";
+import { notFound } from "next/navigation";
+import MDXComponents from "@/components/MDXComponents";
 
-<MDXRemote source={content} components={customComponents} />
+interface Props {
+  params: Promise<{ slug: string }>;
+}
+
+export async function generateMetadata({ params }: Props) {
+  const { slug } = await params;
+  const post = getPostBySlug(slug);
+  if (!post) return { title: "文章未找到" };
+
+  return {
+    title: post.title,
+    description: post.summary,
+    openGraph: {
+      title: post.title,
+      description: post.summary,
+      type: "article",
+    },
+  };
+}
+
+export default async function PostPage({ params }: Props) {
+  const { slug } = await params;
+  const post = getPostBySlug(slug);
+  if (!post) notFound();
+
+  const { prev, next } = getAdjacentPosts(slug);
+
+  return (
+    <article className="mx-auto max-w-3xl px-4 py-8">
+      <h1 className="mb-2 text-3xl font-bold">{post.title}</h1>
+      <time className="text-sm text-slate-500">{post.date}</time>
+
+      <div className="prose mt-8 max-w-none dark:prose-invert">
+        <MDXRemote source={post.content} components={MDXComponents} />
+      </div>
+
+      <nav className="mt-12 flex justify-between">
+        {prev && <a href={`/blog/${prev.slug}`}>← {prev.title}</a>}
+        {next && <a href={`/blog/${next.slug}`}>{next.title} →</a>}
+      </nav>
+    </article>
+  );
+}
 ```
 
-## 代码高亮
+`MDXRemote` 在服务端将 MDX 源码渲染为 React 组件，**零客户端 JS 开销**。`components` 参数可以将 HTML 标签映射为自定义 React 组件。
 
-使用 `rehype-pretty-code` 配合 Shiki 实现代码块语法高亮：
+### 3. 代码高亮
+
+`rehype-pretty-code` + `shiki` 的组合是目前 MDX 代码高亮的主流方案，基于 VS Code 同款 TextMate 语法引擎，支持行号、高亮行、标题等高级功能：
 
 ```typescript
-rehypePlugins: [
-  [rehypePrettyCode, { theme: "github-dark" }]
-]
+// next.config.ts
+import createMDX from "@next/mdx";
+import remarkGfm from "remark-gfm";
+import rehypePrettyCode from "rehype-pretty-code";
+
+const withMDX = createMDX({
+  options: {
+    remarkPlugins: [remarkGfm],
+    rehypePlugins: [
+      [rehypePrettyCode, { theme: "github-dark", keepBackground: false }],
+    ],
+  },
+});
+
+export default withMDX({ pageExtensions: ["ts", "tsx", "mdx"] });
 ```
+
+配合 `MDXComponents.tsx` 中自定义的 `<pre>` 和 `<code>`，可以实现**一键复制**按钮：
+
+```tsx
+// src/components/MDXComponents.tsx
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <button
+      onClick={async () => {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="absolute right-2 top-2 rounded px-2 py-1 text-xs opacity-50 hover:opacity-100"
+    >
+      {copied ? "已复制" : "复制"}
+    </button>
+  );
+}
+```
+
+`__rawString__` 是 `rehype-pretty-code` 注入到 `<code>` 元素上的属性，携带原始代码文本，方便复制功能直接获取。
+
+### 4. 全文搜索
+
+Fuse.js 是一款轻量级的模糊搜索库，支持中文分词、权重配置和阈值调优：
+
+```typescript
+// src/lib/posts.ts
+import Fuse from "fuse.js";
+
+export function searchPosts(query: string): Post[] {
+  if (!query.trim()) return getAllPosts();
+
+  const fuse = new Fuse(getAllPosts(), {
+    keys: [
+      { name: "title", weight: 0.5 },
+      { name: "summary", weight: 0.3 },
+      { name: "content", weight: 0.2 },
+    ],
+    threshold: 0.4,   // 越低越严格
+    includeScore: true,
+  });
+
+  return fuse.search(query).map((r) => r.item);
+}
+```
+
+搜索栏配合 300ms 防抖，避免每次按键都触发搜索：
+
+```tsx
+// components/SearchBar.tsx
+const [query, setQuery] = useState("");
+const debouncedQuery = useDebounce(query, 300);
+
+useEffect(() => {
+  const results = searchPosts(debouncedQuery);
+  onSearch(results);
+}, [debouncedQuery]);
+```
+
+### 5. 暗色模式
+
+Tailwind CSS 的 `darkMode: "class"` 策略配合 `localStorage` 持久化，页面刷新不丢失偏好：
+
+```tsx
+// 在 layout.tsx 的 <head> 中注入内联脚本，先于页面渲染执行
+<script
+  dangerouslySetInnerHTML={{
+    __html: `
+      (function() {
+        const theme = localStorage.getItem('theme');
+        if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    `,
+  }}
+/>
+```
+
+这个内联脚本必须在 `<head>` 中以阻塞方式执行——如果放在 `useEffect` 中，页面会先以亮色模式渲染再切换为暗色，产生明显的闪烁（FOUC）。
+
+### 6. 文章目录 (TOC)
+
+使用 `IntersectionObserver` 监听页面中每个标题的可见状态，当前阅读位置高亮对应目录项：
+
+```tsx
+// components/TOC.tsx
+useEffect(() => {
+  const headings = document.querySelectorAll("h2, h3");
+  const observer = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((e) => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible.length > 0) setActiveId(visible[0].target.id);
+    },
+    { rootMargin: "-80px 0px -80% 0px" }
+  );
+
+  headings.forEach((h) => observer.observe(h));
+  return () => observer.disconnect();
+}, []);
+```
+
+`rootMargin` 的负值让检测区域比视口略小，确保当前正在阅读的标题——而非刚进入视口的标题——被标记为"活跃"。
+
+### 7. SEO 优化
+
+除了 `generateMetadata` 为每个页面动态生成 `<title>` 和 `<meta>` 标签，还需要 `sitemap.xml` 和 `robots.txt`：
+
+```typescript
+// src/app/sitemap.ts
+import { getAllPosts } from "@/lib/posts";
+
+export default function sitemap() {
+  const baseUrl = "https://merrain.cn";
+  const posts = getAllPosts().map((p) => ({
+    url: `${baseUrl}/blog/${p.slug}`,
+    lastModified: p.date,
+  }));
+
+  return [
+    { url: baseUrl, lastModified: new Date() },
+    { url: `${baseUrl}/blog`, lastModified: new Date() },
+    ...posts,
+  ];
+}
+```
+
+Next.js 15 支持直接从 `sitemap.ts` 默认导出函数，框架自动处理 XML 序列化，无需手写模板。
+
+## 部署
+
+我的博客部署在腾讯云轻量服务器（2核2G），Nginx 反向代理 + Let's Encrypt SSL + PM2 进程守护：
+
+```nginx
+# /etc/nginx/sites-available/myblogger
+server {
+    listen 443 ssl http2;
+    server_name merrain.cn www.merrain.cn;
+
+    ssl_certificate     /etc/letsencrypt/live/merrain.cn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/merrain.cn/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /ws/ {
+        proxy_pass http://127.0.0.1:3001/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+}
+
+server {
+    listen 80;
+    server_name merrain.cn www.merrain.cn;
+    return 301 https://$host$request_uri;
+}
+```
+
+静态资源设置强缓存，gzip 压缩开启。每次推送代码后，SCP 同步到服务器 + `npm run build` + `pm2 restart`，一分钟内完成更新。
 
 ## 总结
 
-Next.js + MDX 是构建个人博客的理想组合：
+Next.js + MDX 这套技术栈的核心优势是**简单和可控**——没有数据库、没有 CMS 后台。你的博客就是代码仓库，文章就是 Markdown 文件。
 
-| 特性 | 方案 |
-|------|------|
-| 路由 | Next.js App Router |
-| 内容 | MDX 文件 |
-| 样式 | Tailwind CSS |
-| 搜索 | Fuse.js |
-| 高亮 | rehype-pretty-code |
+| 特性 | 方案 | 说明 |
+|------|------|------|
+| 路由 | App Router | 文件系统即路由，`[slug]` 动态匹配 |
+| 内容 | MDX 文件 | Git 版本管理，无数据库依赖 |
+| 样式 | Tailwind CSS | utility-first，暗色模式一行配置 |
+| 搜索 | Fuse.js | 模糊匹配 + 前端分词，无需后端 |
+| 高亮 | rehype-pretty-code | TextMate 语法引擎，效果媲美 VS Code |
+| 目录 | IntersectionObserver | 滚动追踪，当前章节高亮 |
+| SEO | generateMetadata | 动态 OG 标签 + sitemap 自动生成 |
+| 部署 | Nginx + PM2 | 反向代理 + SSL + 进程守护 |
 
-希望这篇文章能帮助你搭建自己的博客系统！
+博客是一个持续打磨的项目，从最简单开始、按需迭代——这本身就是最好的学习方法。

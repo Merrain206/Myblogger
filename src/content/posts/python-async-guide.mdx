@@ -2,79 +2,301 @@
 title: "Python 异步编程入门指南"
 date: "2026-05-01"
 category: "后端"
-tags: ["Python", "异步", "asyncio"]
-summary: "深入理解 Python 的 asyncio 库，掌握异步编程的核心概念和实践技巧。"
+tags: ["Python", "异步", "asyncio", "aiohttp", "并发"]
+summary: "深入理解 Python asyncio 的核心概念，掌握协程、事件循环、并发控制、错误处理和真实场景下的最佳实践。"
 ---
 
-## 异步编程简介
+## 异步编程的核心思想
 
-异步编程是一种允许程序在等待 I/O 操作时继续执行其他任务的编程范式。在 Python 中，`asyncio` 是官方提供的异步编程库。
+先理解一个本质问题：**你的程序在等待什么？**
+
+大部分后端应用的瓶颈不是 CPU，而是 I/O —— 等数据库返回结果、等 API 响应、等文件读取完成。同步代码在等待时，整个线程被阻塞，CPU 闲置，时间被浪费。
+
+异步编程的思路很简单：**在等待 I/O 时主动让出控制权，去处理其他任务**。就像咖啡店里，你不会站在柜台前盯着咖啡师手冲 5 分钟——你会先点单，然后去旁边坐着，等喊到你名字再回来取。这就是"协程"的直觉模型。
+
+Python 从 3.5 引入 `async/await` 语法后，`asyncio` 成为官方异步编程标准库。如果你的应用大量依赖网络请求、数据库查询、文件读写，异步化之后的性能提升往往是数量级的。
 
 ## 核心概念
 
-### async/await
+### 协程与事件循环
+
+协程（coroutine）是 `async def` 定义的函数，调用它不会立即执行，而是返回一个协程对象，需要交给**事件循环**调度：
 
 ```python
 import asyncio
 
-async def fetch_data(url: str) -> dict:
-    """异步获取数据"""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            return await response.json()
+async def say_hello(name: str) -> str:
+    await asyncio.sleep(1)       # 模拟 I/O 等待
+    return f"Hello, {name}!"
+
+# 错误：直接调用只返回协程对象，不会执行
+# result = say_hello("merrain")
+
+# 正确：通过 asyncio.run() 启动事件循环
+result = asyncio.run(say_hello("merrain"))
+print(result)  # Hello, merrain!
+```
+
+`asyncio.run()` 做了三件事：创建事件循环、运行协程直到完成、关闭事件循环。程序里通常只调用一次，作为异步程序的入口。
+
+### 实战：并发 HTTP 请求
+
+用 `aiohttp` 发 HTTP 请求是 asyncio 最常见的应用场景：
+
+```python
+import asyncio
+import aiohttp
+
+async def fetch_json(session: aiohttp.ClientSession, url: str) -> dict:
+    async with session.get(url) as response:
+        return await response.json()
 
 async def main():
-    data = await fetch_data("https://api.example.com/data")
-    print(data)
+    urls = [
+        "https://api.github.com/users/merrain206",
+        "https://api.github.com/users/torvalds",
+        "https://api.github.com/users/gaearon",
+    ]
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_json(session, url) for url in urls]
+        results = await asyncio.gather(*tasks)
+
+    for user in results:
+        print(user.get("login"), user.get("public_repos"))
 
 asyncio.run(main())
 ```
 
-### 并发执行
+三个请求并发发出，总耗时约等于最慢的那一个——而不是三个之和。
 
-使用 `asyncio.gather()` 并发执行多个协程：
+### 并发 vs 并行
 
-```python
-async def fetch_all(urls: list[str]) -> list[dict]:
-    tasks = [fetch_data(url) for url in urls]
-    results = await asyncio.gather(*tasks)
-    return results
-```
+一个常见的概念混淆需要澄清：
+
+| 概念 | 含义 | Python 实现 |
+|------|------|------------|
+| **并发（Concurrency）** | 多个任务交替推进，看起来"同时"在做 | `asyncio` — 单线程切换 |
+| **并行（Parallelism）** | 多个任务真正同时执行 | `multiprocessing` — 多进程 |
+
+asyncio 实现的是**并发**而非并行。它在一个线程内通过协作式多任务切换来同时推进多个协程。对于 I/O 密集型任务（Web 请求、数据库查询），单线程并发已足够高效；对于 CPU 密集型任务（图像处理、数学计算），你需要 `multiprocessing`，而非 asyncio。
 
 ### 超时控制
 
+在生产环境中，**永远不要无超时地等待一个外部请求**：
+
 ```python
-async def fetch_with_timeout(url: str, timeout: float = 5.0):
+async def fetch_with_timeout(url: str, timeout: float = 5.0) -> dict | None:
     try:
         async with asyncio.timeout(timeout):
-            return await fetch_data(url)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    return await response.json()
     except TimeoutError:
         print(f"请求超时: {url}")
         return None
+    except aiohttp.ClientError as e:
+        print(f"请求出错: {url} — {e}")
+        return None
 ```
+
+Python 3.11 引入的 `asyncio.timeout()` 比旧的 `asyncio.wait_for()` 更推荐使用：上下文管理器语义更清晰，且支持嵌套超时。
+
+### 使用 Task 实现"即发即走"
+
+`asyncio.create_task()` 创建一个后台任务，**不阻塞当前协程**：
+
+```python
+async def log_request(url: str):
+    await asyncio.sleep(0.5)  # 模拟异步写日志
+    print(f"[LOG] 已记录: {url}")
+
+async def handle_request(url: str):
+    # 创建后台日志任务，不等待完成就继续
+    asyncio.create_task(log_request(url))
+    return {"status": "ok", "url": url}
+```
+
+**注意**：`create_task` 创建的任务需要保持引用，否则可能被垃圾回收。如果需要在函数结束后确保所有后台任务完成，用 `asyncio.TaskGroup`（Python 3.11+）：
+
+```python
+async def handle_multiple(urls: list[str]):
+    async with asyncio.TaskGroup() as tg:
+        for url in urls:
+            tg.create_task(fetch_with_timeout(url))
+    # 退出上下文时，所有任务都已完成
+```
+
+## 并发控制
+
+### 信号量限流
+
+无限制地并发请求可能压垮目标服务，也容易被反爬。使用 `Semaphore` 控制并发上限：
+
+```python
+semaphore = asyncio.Semaphore(10)
+
+async def limited_fetch(session: aiohttp.ClientSession, url: str) -> dict:
+    async with semaphore:
+        return await fetch_json(session, url)
+```
+
+`Semaphore(10)` 确保同一时刻最多只有 10 个协程在执行临界区代码。第 11 个协程到达 `async with semaphore` 时会自动等待，直到前面的协程退出。
+
+### 生产者-消费者模式
+
+对于需要"一边爬取一边处理"的场景，`asyncio.Queue` 是比 `gather` 更灵活的选择：
+
+```python
+async def producer(queue: asyncio.Queue, urls: list[str]):
+    for url in urls:
+        await queue.put(url)
+    for _ in range(3):
+        await queue.put(None)  # 终止信号
+
+async def consumer(queue: asyncio.Queue, worker_id: int):
+    while True:
+        url = await queue.get()
+        if url is None:
+            break
+        try:
+            result = await fetch_with_timeout(url)
+            print(f"[Worker {worker_id}] {url} → {result}")
+        finally:
+            queue.task_done()
+
+async def main():
+    queue = asyncio.Queue(maxsize=20)
+    urls = [...]  # 大量 URL
+
+    producers = [asyncio.create_task(producer(queue, urls))]
+    consumers = [asyncio.create_task(consumer(queue, i)) for i in range(3)]
+
+    await asyncio.gather(*producers)
+    await queue.join()  # 等所有 task_done
+    for c in consumers:
+        c.cancel()
+```
+
+Queue 充当缓冲区，消费者以不同速度消费，不会因为 URL 过多而 OOM。
 
 ## 性能对比
 
 | 方式 | 100 个请求耗时 | 说明 |
 |------|---------------|------|
-| 同步 | ~50s | 串行执行 |
-| 异步 | ~2s | 并发执行 |
-| 多线程 | ~5s | 受 GIL 限制 |
+| 同步（串行） | ~50s | 每个请求等 0.5s 响应，100 个依次等待 |
+| 多线程（10 线程） | ~5s | GIL 限制 + 线程切换开销 |
+| 异步（10 并发） | ~1s | 真正非阻塞 I/O，单线程无切换开销 |
+| 异步（无限并发） | ~0.5s | 约等于单次请求耗时 |
 
-## 最佳实践
+**为什么异步比多线程快？** 线程切换涉及系统调用和上下文保存/恢复，有内核态开销。asyncio 在用户态通过 `await` 显式让出控制权，没有内核态切换成本，也没有 GIL 竞争。
 
-1. **避免阻塞调用** — 不要在协程中使用 `time.sleep()`，改用 `await asyncio.sleep()`
-2. **使用 async with** — 确保资源正确释放
-3. **合理设置并发度** — 使用信号量控制并发数量
+## 常见陷阱与最佳实践
+
+### 1. 不要在协程里用同步阻塞调用
+
+这是新手最常犯的错误：
 
 ```python
-semaphore = asyncio.Semaphore(10)
+# 错误：time.sleep 阻塞了整个事件循环！
+async def bad_fetch(url: str):
+    import time
+    time.sleep(2)               # 事件循环被冻结 2 秒
+    return requests.get(url)     # requests 也是同步的
 
-async def limited_fetch(url: str):
-    async with semaphore:
-        return await fetch_data(url)
+# 正确：全部使用异步版本
+async def good_fetch(url: str):
+    await asyncio.sleep(2)       # 非阻塞等待
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()
 ```
+
+一个协程里只要有一行阻塞代码，整个事件循环就卡住了。
+
+### 2. 数据库操作也要异步
+
+如果你用了 `asyncio` 但数据库驱动还是同步的，等于白费。选择对应的异步驱动：
+
+| 数据库 | 同步库 | 异步库 |
+|--------|--------|--------|
+| PostgreSQL | `psycopg2` | `asyncpg` |
+| MySQL | `pymysql` | `aiomysql` |
+| Redis | `redis-py` | `redis.asyncio` |
+| MongoDB | `pymongo` | `motor` |
+
+```python
+import asyncpg
+
+async def get_users(pool: asyncpg.Pool) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id, name FROM users LIMIT 10")
+        return [dict(row) for row in rows]
+
+async def main():
+    pool = await asyncpg.create_pool(
+        "postgresql://user:pass@localhost/mydb",
+        min_size=5,
+        max_size=20,
+    )
+    users = await get_users(pool)
+    await pool.close()
+```
+
+### 3. 正确处理取消与清理
+
+协程可以被 `task.cancel()` 取消，此时抛出 `CancelledError`。如果在 `finally` 块里写了阻塞代码，取消会被延迟：
+
+```python
+async def safe_worker():
+    try:
+        while True:
+            await asyncio.sleep(1)
+            print("工作中...")
+    except asyncio.CancelledError:
+        print("收到取消信号，开始清理...")
+        raise  # 重新抛出以传播取消
+    finally:
+        await asyncio.sleep(0)  # finally 里也不能用 time.sleep()
+```
+
+### 4. 使用 `asyncio.as_completed` 处理先到先得
+
+需要"谁先返回就先处理谁"的场景：
+
+```python
+async def fetch_race(urls: list[str]):
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_json(session, url) for url in urls]
+        for coro in asyncio.as_completed(tasks):
+            result = await coro   # 谁先完成就拿到谁
+            print(f"最早返回: {result}")
+            break                 # 拿到最快结果后取消其余
+        for t in tasks:
+            t.cancel()
+```
+
+这在"多数据源取最快结果"的场景中很有用。
+
+## 何时用异步？何时不用？
+
+| 场景 | 推荐方案 |
+|------|---------|
+| Web 爬虫 / API 聚合 | asyncio + aiohttp — 效果显著 |
+| 高并发 WebSocket 服务 | asyncio — 每个连接一个协程，轻松承载上千连接 |
+| 数据库频繁读写 | asyncio + asyncpg — 查询并发数大幅提升 |
+| CPU 密集型计算 | `multiprocessing` — asyncio 帮不上忙 |
+| 小工具脚本（一次调用） | 同步即可 — 引入 asyncio 是无谓的复杂性 |
 
 ## 总结
 
-异步编程是提升 I/O 密集型应用性能的有效手段。Python 的 asyncio 提供了优雅的异步编程模型，掌握它能让你的后端开发能力更上一层楼。
+Python 异步编程的学习曲线分为两段：前半段是理解 `async/await` 语法和事件循环机制（不难），后半段是**把同步思维转成异步思维**（需要练习）。
+
+几个核心记忆点：
+
+- **协程的本质是协作式多任务**——通过 `await` 显式让出控制权，而非操作系统抢占
+- **异步 ≠ 快**——它的价值在于让等待时间被利用，而非让计算变快
+- **全链路异步才有效**——数据库、缓存、HTTP 客户端都必须用异步驱动，一个环节同步全链路阻塞
+- **永远设置超时**——`asyncio.timeout()` 是生产环境的标配
+- **`asyncio.run()` 只调一次**——它是程序入口，不要反复调用
+
+如果你之前只用过 `requests` + `for` 循环写爬虫，试着用 `aiohttp` + `asyncio.gather` 重写一次——那个速度差会让你忘不掉异步的味道。

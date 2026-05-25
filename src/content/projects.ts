@@ -104,12 +104,16 @@ export const projects: Project[] = [
     title: "MyBlogger",
     slug: "myblogger",
     description:
-      "基于 Next.js 15 + MDX 的个人博客系统，集全文搜索、评论、SEO、构词法记单词于一体。",
+      "基于 Next.js 15 + MDX 的个人博客系统，集全文搜索、评论、SEO、工具箱、构词法记单词于一体，已部署生产。",
     techStack: ["Next.js", "TypeScript", "Tailwind CSS", "MDX", "Fuse.js", "Nginx", "PM2"],
     featured: true,
     longDescription: `MyBlogger 是我用 Next.js 15 + MDX 构建的个人博客系统（本网站）。
 
-采用 App Router 架构，所有页面使用服务端组件 (RSC)，博客列表页的搜索和过滤功能通过客户端组件实现。内容管理采用文件系统的 MDX 格式，无需数据库。已部署至腾讯云轻量服务器，Nginx 反向代理 + Let's Encrypt SSL（HTTP 自动跳转 HTTPS），PM2 进程守护。`,
+采用 App Router 架构，所有页面使用服务端组件 (RSC)，博客列表页的搜索和过滤功能通过客户端组件实现。内容管理采用文件系统的 MDX 格式，无需数据库。
+
+除博客核心功能外，还集成了两个实用模块：**工具箱**（12306 车票生成器，输入电子发票信息生成蓝色纸质报销凭证样式 PDF，支持下载打印）和**构词法记单词**（通过词根/前缀/后缀分解记忆，涵盖 CET4/CET6 词汇，支持闪卡翻页和学习模式）。
+
+已部署至腾讯云轻量服务器，Nginx 反向代理 + Let's Encrypt SSL，PM2 进程守护。`,
     features: [
       "Next.js 15 App Router + RSC（服务端组件优先）",
       "MDX 文章内容管理 (文件系统存储，无需数据库)",
@@ -120,7 +124,8 @@ export const projects: Project[] = [
       "代码块语法高亮 (rehype-pretty-code + Shiki) + 一键复制",
       "Giscus 评论系统 (GitHub Discussions 驱动，主题自适应)",
       "SEO 优化 (sitemap.xml / robots.txt / OpenGraph 动态封面图)",
-      "构词法记单词系统：词根词缀法 + 闪卡/学习模式，涵盖 CET4/CET6",
+      "构词法记单词系统：词根/前缀/后缀分解记忆 + 闪卡/学习模式，涵盖 CET4/CET6",
+      "工具箱模块：12306 车票生成器（电子发票信息生成蓝色纸质报销凭证样式 PDF）",
       "Nginx 反向代理 + Let's Encrypt SSL + gzip + 静态资源强缓存",
       "PM2 进程管理 (myblogger + ws-gomoku 双进程)",
       "响应式设计 (移动端优先) + 上一篇/下一篇导航",

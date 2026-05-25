@@ -32,8 +32,7 @@
       "Bash(npx tsx *)",
       "Bash(ssh *)",
       "Bash(mkdir -p ~/.ssh/tmp)",
-      "Bash(echo '{{SSH_KEY_SETUP}} *)",
-      "Bash(chmod 600 ~/.ssh/tmp/deploy_key)",
+
       "Bash(tar czf *)",
       "Bash(git rm *)",
       "mcp__plugin_everything-claude-code_playwright__browser_navigate",
@@ -44,8 +43,7 @@
       "Bash(npm install *)",
       "Bash(node *)",
       "Read(//c/Users/WWJDS/.ssh/**)",
-      "Bash(printf '%s\\\\n' '{{SSH_PRIVATE_KEY_REDACTED}}')",
-      "Bash(chmod 600 ~/.ssh/tmp/myblogger_key)",
+
       "Bash(scp *)",
       "Bash(curl -s http://{{SERVER_IP}}/gomoku)",
       "Read(//tmp/**)",

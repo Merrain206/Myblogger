@@ -120,8 +120,8 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 | 系统 | Ubuntu 22.04 LTS |
 | 配置 | 2核2G 4M带宽 50GB SSD |
 | SSH 用户 | ubuntu |
-| SSH 密钥 | `{{SSH_KEY_PATH}}` (RSA 2048) |
-| SSH 连接 | `ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}}` |
+| SSH 密钥 | `claude_private.pem` (RSA 2048) |
+| SSH 连接 | `ssh -i claude_private.pem ubuntu@{{SERVER_IP}}` |
 | 项目路径 | `/home/ubuntu/myblogger` |
 | Web 服务 | Nginx (80/443) → Next.js (3000)，HTTP 自动跳转 HTTPS |
 | SSL 证书 | Let's Encrypt，自动续期，certbot 管理 |
@@ -142,8 +142,8 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 git add <files> && git commit && git push origin main
 
 # 2. 同步到服务器
-scp -i {{SSH_KEY_PATH}} -r <changed-files> ubuntu@{{SERVER_IP}}:/home/ubuntu/myblogger/scp-tmp/
-ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "
+scp -i claude_private.pem -r <changed-files> ubuntu@{{SERVER_IP}}:/home/ubuntu/myblogger/scp-tmp/
+ssh -i claude_private.pem ubuntu@{{SERVER_IP}} "
   cd /home/ubuntu/myblogger
   cp scp-tmp/... <targets>
   npm install
@@ -157,11 +157,11 @@ ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "
 
 ```bash
 # 查看服务状态
-ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "pm2 list"
+ssh -i claude_private.pem ubuntu@{{SERVER_IP}} "pm2 list"
 
 # 查看日志
-ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "pm2 logs --lines 50"
+ssh -i claude_private.pem ubuntu@{{SERVER_IP}} "pm2 logs --lines 50"
 
 # 重启服务
-ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "pm2 restart myblogger ws-gomoku"
+ssh -i claude_private.pem ubuntu@{{SERVER_IP}} "pm2 restart myblogger ws-gomoku"
 ```

@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 行为规则
 
-1. **自动同步到云服务器**：每次修改项目代码后（不含 .md 文档、不含 .git/），完成构建验证通过后，自动通过 SCP 将变更文件同步到云服务器（82.157.193.186），执行 `npm run build` 并重启 PM2 进程。
+1. **自动同步到云服务器**：每次修改项目代码后（不含 .md 文档、不含 .git/），完成构建验证通过后，自动通过 SCP 将变更文件同步到云服务器（{{SERVER_IP}}），执行 `npm run build` 并重启 PM2 进程。
 2. **Git 推送需用户确认**：**禁止**主动执行 `git push`，该命令只能由用户本人明确发出后才可执行。`git add` 和 `git commit` 也不主动执行，除非用户要求。
+3. **敏感信息脱敏**：**禁止**在代码、文档、配置文件中硬编码服务器 IP、SSH 私钥、API 密钥、数据库密码等敏感信息。所有敏感值统一使用 `{{占位符}}` 替代，真实值通过环境变量或外部安全存储注入。
 
 ## 项目概述
 
@@ -115,12 +116,12 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 | 项目 | 值 |
 |------|-----|
 | 域名 | **merrain.cn** / **www.merrain.cn** |
-| IP | 82.157.193.186 |
+| IP | {{SERVER_IP}} |
 | 系统 | Ubuntu 22.04 LTS |
 | 配置 | 2核2G 4M带宽 50GB SSD |
 | SSH 用户 | ubuntu |
-| SSH 密钥 | `~/.ssh/tmp/myblogger_key` (RSA 2048) |
-| SSH 连接 | `ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186` |
+| SSH 密钥 | `{{SSH_KEY_PATH}}` (RSA 2048) |
+| SSH 连接 | `ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}}` |
 | 项目路径 | `/home/ubuntu/myblogger` |
 | Web 服务 | Nginx (80/443) → Next.js (3000)，HTTP 自动跳转 HTTPS |
 | SSL 证书 | Let's Encrypt，自动续期，certbot 管理 |
@@ -141,8 +142,8 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 git add <files> && git commit && git push origin main
 
 # 2. 同步到服务器
-scp -i ~/.ssh/tmp/myblogger_key -r <changed-files> ubuntu@82.157.193.186:/home/ubuntu/myblogger/scp-tmp/
-ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "
+scp -i {{SSH_KEY_PATH}} -r <changed-files> ubuntu@{{SERVER_IP}}:/home/ubuntu/myblogger/scp-tmp/
+ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "
   cd /home/ubuntu/myblogger
   cp scp-tmp/... <targets>
   npm install
@@ -156,11 +157,11 @@ ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "
 
 ```bash
 # 查看服务状态
-ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "pm2 list"
+ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "pm2 list"
 
 # 查看日志
-ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "pm2 logs --lines 50"
+ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "pm2 logs --lines 50"
 
 # 重启服务
-ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 "pm2 restart myblogger ws-gomoku"
+ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} "pm2 restart myblogger ws-gomoku"
 ```

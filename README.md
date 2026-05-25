@@ -87,12 +87,12 @@ npm start          # 启动生产服务器
 
 ## 部署
 
-项目已部署在 82.157.193.186（Ubuntu 22.04 + Nginx + PM2 + Let's Encrypt SSL）。
+项目已部署在腾讯云服务器（Ubuntu 22.04 + Nginx + PM2 + Let's Encrypt SSL）。
 
 ```bash
 # 本地构建后同步到服务器
 tar czf - --exclude='node_modules' --exclude='.next' --exclude='.git' . \
-  | ssh -i ~/.ssh/tmp/myblogger_key ubuntu@82.157.193.186 \
+  | ssh -i {{SSH_KEY_PATH}} ubuntu@{{SERVER_IP}} \
     "cd ~/myblogger && tar xzf - && npm install && npm run build && pm2 restart myblogger ws-gomoku"
 ```
 

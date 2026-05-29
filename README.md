@@ -44,6 +44,7 @@
 | Fuse.js | 客户端全文搜索 |
 | rehype-pretty-code + Shiki | 代码高亮 |
 | remark-gfm | GitHub 风格 Markdown |
+| react-markdown | AI 解卦 Markdown 渲染 |
 | date-fns | 日期格式化 |
 | ws | WebSocket 服务器（五子棋在线对战） |
 | lunar-typescript | 农历/干支/节气（周易排盘） |

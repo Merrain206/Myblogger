@@ -37,6 +37,7 @@ npm run lint       # ESLint 检查
 | Fuse.js | 客户端全文搜索 |
 | rehype-pretty-code + Shiki | 代码块语法高亮 |
 | remark-gfm | GitHub 风格 Markdown |
+| react-markdown | AI 解卦结果 Markdown 渲染 |
 | date-fns | 日期格式化 |
 | lunar-typescript | 农历/干支/节气计算（周易工具） |
 
@@ -145,7 +146,7 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 - `src/lib/yijing/liuqin.ts` — 六亲配卦（宫五行 vs 爻五行生克）
 - `src/lib/yijing/data/bagua.ts` — 六十四卦完整数据（卦辞/爻辞/纳甲五行）
 - `src/lib/yijing/data/regions.ts` — ~280 个中国城市经纬度
-- `src/components/yijing/` — YaoSelector / PaipanDisplay / AIInterpret 组件
+- `src/components/yijing/` — YaoSelector / PaipanDisplay / AIInterpret / ArchivePanel 组件
 
 ### 解卦流程
 

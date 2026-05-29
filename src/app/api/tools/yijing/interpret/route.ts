@@ -23,7 +23,7 @@ const PERSPECTIVES: { name: string; role: string; temperature: number }[] = [
   },
 ];
 
-async function callDeepSeek(systemPrompt: string, userMessage: string, temperature: number): Promise<string> {
+async function callDeepSeek(systemPrompt: string, userMessage: string, temperature: number, maxTokens = 1536): Promise<string> {
   const res = await fetch(API_URL, {
     method: "POST",
     headers: {
@@ -37,7 +37,7 @@ async function callDeepSeek(systemPrompt: string, userMessage: string, temperatu
         { role: "user", content: userMessage },
       ],
       temperature,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
     }),
   });
 
@@ -88,7 +88,7 @@ function buildUserMessage(input: InterpretRequest): string {
   }
 
   if (shenSha.length > 0) {
-    lines.push(`神煞：${shenSha.map((s) => `${s.name}(${s.value})`).join("、")}`);
+    lines.push(`问卦时刻神煞：${shenSha.map((s) => `${s.name}(${s.value})`).join("、")}`);
   }
 
   return lines.join("\n");
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
         .map((p) => `【${p.name}】\n${p.content}`)
         .join("\n\n");
 
-      synthesis = await callDeepSeek(synthesisPrompt, perspectivesText, 0.5);
+      synthesis = await callDeepSeek(synthesisPrompt, perspectivesText, 0.5, 3072);
     } catch {
       synthesis = perspectives.map((p) => `【${p.name}】\n${p.content}`).join("\n\n");
     }

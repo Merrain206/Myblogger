@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { InterpretResult } from "@/lib/yijing/types";
 
 export default function AIInterpret({ result }: { result: InterpretResult }) {
@@ -35,8 +37,15 @@ export default function AIInterpret({ result }: { result: InterpretResult }) {
       </div>
 
       <div className="p-5">
-        <div className="prose prose-sm prose-slate max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-slate-700 dark:text-slate-300">
-          {content}
+        <div className="prose prose-sm prose-slate max-w-none dark:prose-invert
+          prose-headings:text-[#8B6914] dark:prose-headings:text-[#C9A96E]
+          prose-a:text-[#C9A96E] dark:prose-a:text-[#C9A96E]
+          prose-strong:text-slate-800 dark:prose-strong:text-slate-200
+          prose-li:marker:text-[#C9A96E]
+        ">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {content}
+          </ReactMarkdown>
         </div>
       </div>
     </div>

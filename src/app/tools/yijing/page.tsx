@@ -7,6 +7,7 @@ import { getProvinces, getCitiesByProvince } from "@/lib/yijing/data/regions";
 import YaoSelector from "@/components/yijing/YaoSelector";
 import PaipanDisplay from "@/components/yijing/PaipanDisplay";
 import AIInterpret from "@/components/yijing/AIInterpret";
+import ArchivePanel from "@/components/yijing/ArchivePanel";
 
 const DEFAULT_YAO: YaoValue[] = [7, 7, 7, 7, 7, 7];
 
@@ -207,6 +208,10 @@ export default function YijingPage() {
               )}
 
               {interpretResult && <AIInterpret result={interpretResult} />}
+
+              {paipanResult && (
+                <ArchivePanel paipan={paipanResult} interpret={interpretResult} />
+              )}
             </div>
           ) : (
             <div className="flex h-full min-h-[300px] items-center justify-center rounded-xl border border-dashed border-[#D4C5A0]/60 bg-[#FDF8F0]/50 text-sm text-slate-400 dark:border-slate-600 dark:bg-slate-800/30">

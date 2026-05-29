@@ -26,6 +26,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
     "rehype-pretty-code": "^0.14.0",
     "remark-gfm": "^4.0.0",
     "shiki": "^3.0.0",

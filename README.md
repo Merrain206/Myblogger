@@ -1,6 +1,6 @@
 # MyBlogger
 
-基于 Next.js 15 + MDX 的个人博客系统，集成五子棋在线对战和构词法记单词工具。
+基于 Next.js 15 + MDX 的个人博客系统，集成五子棋在线对战、构词法记单词和周易六爻排盘解卦工具。
 
 ## 功能特性
 
@@ -26,6 +26,12 @@
 - 游戏排行榜 API
 - 落子校验、悔棋、重新开始
 
+### 周易六爻
+- **手工录入六爻** — 用户自备铜钱摇卦，逐爻选择（老阴/少阳/少阴/老阳）
+- **自动排盘** — 四柱干支、真太阳时、本卦/变卦、六亲、神煞、空亡
+- **AI 多方解卦** — DeepSeek 四轮交叉验证（卦象/动爻/建议 3 视角 + 综合）
+- 支持全国 ~280 个地级市经纬度选择
+
 ## 技术栈
 
 | 技术 | 用途 |
@@ -40,6 +46,7 @@
 | remark-gfm | GitHub 风格 Markdown |
 | date-fns | 日期格式化 |
 | ws | WebSocket 服务器（五子棋在线对战） |
+| lunar-typescript | 农历/干支/节气（周易排盘） |
 | @giscus/react | 博客评论区 |
 
 ## 快速开始
@@ -63,24 +70,27 @@ npm start          # 启动生产服务器
 │   ├── app/
 │   │   ├── about/                # 关于页
 │   │   ├── api/gomoku/           # 五子棋排行榜 + 房间状态 API
+│   │   ├── api/tools/yijing/      # 周易 AI 解卦 API
 │   │   ├── blog/                 # 博客列表 + 文章详情
 │   │   ├── gomoku/
 │   │   │   ├── online/room/      # 在线房间对战页
 │   │   │   ├── play/             # AI 对战页
 │   │   │   └── leaderboard/      # 排行榜页
 │   │   ├── projects/             # 项目展示
+│   │   ├── tools/                # 工具箱（含周易六爻）
 │   │   ├── vocabulary/           # 词汇工具 (词根浏览 + 闪卡 + 背诵)
 │   │   ├── opengraph-image.tsx   # OG 图片生成
 │   │   ├── robots.ts             # robots.txt
 │   │   └── sitemap.ts            # sitemap.xml
 │   ├── components/
+│   │   ├── yijing/                # 周易六爻组件 (爻选择器/排盘/AI解卦)
 │   │   ├── vocabulary/           # 词汇专属组件 (7 个)
 │   │   └── GiscusComments.tsx    # Giscus 评论区组件
 │   ├── content/
 │   │   ├── posts/                # MDX 文章
 │   │   └── projects.ts           # 项目数据
 │   ├── data/                     # 词汇 JSON、五子棋排行榜
-│   ├── lib/                      # 工具函数与类型
+│   ├── lib/                      # 工具函数与类型（含周易排盘算法）
 │   └── styles/                   # 全局样式
 └── public/gomoku/                # 五子棋游戏引擎
 ```

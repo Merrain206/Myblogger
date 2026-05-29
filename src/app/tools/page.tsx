@@ -2,6 +2,16 @@ import Link from "next/link";
 
 const tools = [
   {
+    title: "周易六爻排盘解卦",
+    description: "录入手动摇卦结果，自动推算四柱、神煞、六亲、变卦，结合 AI 多方交叉验证解卦。",
+    href: "/tools/yijing",
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h12M6 8h12M8 12h8M10 16h4M12 20V4" />
+      </svg>
+    ),
+  },
+  {
     title: "车票生成器",
     description: "输入电子发票信息，生成 12306 蓝色纸质报销凭证样式的 PDF，支持下载打印。",
     href: "/tools/ticket",

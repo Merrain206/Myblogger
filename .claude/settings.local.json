@@ -32,7 +32,6 @@
       "Bash(npx tsx *)",
       "Bash(ssh *)",
       "Bash(mkdir -p ~/.ssh/tmp)",
-
       "Bash(tar czf *)",
       "Bash(git rm *)",
       "mcp__plugin_everything-claude-code_playwright__browser_navigate",
@@ -43,7 +42,6 @@
       "Bash(npm install *)",
       "Bash(node *)",
       "Read(//c/Users/WWJDS/.ssh/**)",
-
       "Bash(scp *)",
       "Bash(curl -s http://{{SERVER_IP}}/gomoku)",
       "Read(//tmp/**)",
@@ -74,7 +72,12 @@
       "Bash(ls .env*)",
       "Bash(python *)",
       "Bash(cmd *)",
-      "Bash(grep -oP '.{0,40}分钟阅读.{0,10}')"
+      "Bash(grep -oP '.{0,40}分钟阅读.{0,10}')",
+      "Read(//d/Codes/**)",
+      "Bash(wc *)",
+      "Bash(find D:\\\\\\\\Codes\\\\\\\\Myblogger *)",
+      "Bash(git *)",
+      "Bash(test -f \"D:\\\\\\\\Codes\\\\\\\\beforetask.md\")"
     ]
   }
 }

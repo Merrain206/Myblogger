@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-基于 Next.js 15 + MDX 的个人博客系统，集成了五子棋小游戏。
+基于 Next.js 15 + MDX 的个人博客系统，集成了五子棋小游戏、周易六爻排盘解卦等工具。
 
 ## 常用命令
 
@@ -38,6 +38,7 @@ npm run lint       # ESLint 检查
 | rehype-pretty-code + Shiki | 代码块语法高亮 |
 | remark-gfm | GitHub 风格 Markdown |
 | date-fns | 日期格式化 |
+| lunar-typescript | 农历/干支/节气计算（周易工具） |
 
 ## 架构
 
@@ -46,23 +47,40 @@ npm run lint       # ESLint 检查
 ```
 src/
 ├── app/                        # Next.js App Router
-│   ├── api/gomoku/score/       # 五子棋排行榜 API (GET/POST)
+│   ├── about/                  # 关于页
+│   ├── api/gomoku/             # 五子棋 API (排行榜 + 房间状态)
+│   │   ├── api/tools/yijing/    # 周易 AI 解卦 API
 │   ├── blog/[slug]/            # 文章详情 (MDX 渲染)
-│   └── gomoku/                 # 五子棋页面 (游戏 + 排行榜)
+│   ├── gomoku/                 # 五子棋 (在线 + AI + 排行榜)
+│   ├── projects/               # 项目展示
+│   ├── tags/                   # 标签聚合页
+│   ├── tools/                  # 工具箱 (含周易六爻)
+│   ├── vocabulary/             # 词汇工具 (词根 + 闪卡 + 背诵)
+│   ├── robots.ts / sitemap.ts / opengraph-image.tsx  # SEO
+│   └── layout.tsx / page.tsx   # 根布局与首页
 ├── components/
-│   ├── Navbar.tsx              # 导航栏 + 暗色模式切换
-│   ├── PostCard.tsx / ProjectCard.tsx
+│   ├── Navbar.tsx / Footer.tsx  # 布局组件
+│   ├── PostCard.tsx / ProjectCard.tsx / TicketPreview.tsx
 │   ├── SearchBar.tsx / TagFilter.tsx  # 博客搜索与过滤
-│   ├── TOC.tsx                 # 文章目录 (IntersectionObserver)
-│   └── MDXComponents.tsx       # MDX 自定义组件映射
+│   ├── TOC.tsx / BackToTop.tsx / ReadingProgress.tsx  # 阅读体验
+│   ├── MDXComponents.tsx / GiscusComments.tsx  # MDX 渲染 + 评论
+│   ├── yijing/                  # 周易工具组件 (爻选择器/排盘/AI解卦)
+│   └── vocabulary/             # 词汇工具专属组件
 ├── content/
-│   ├── posts/                  # .mdx 文章文件
+│   ├── posts/                  # .mdx 文章文件 (6 篇)
 │   └── projects.ts            # 项目数据 (静态数组)
 ├── lib/
 │   ├── posts.ts               # 文章加载、搜索、分类、标签
 │   ├── types.ts               # Post, Project 类型
-│   └── gomoku/types.ts        # 五子棋排行榜类型
-├── data/gomoku-scores.json     # 五子棋排行榜持久化 (JSON 文件)
+│   ├── gomoku/types.ts        # 五子棋排行榜类型
+│   └── yijing/                # 周易六爻排盘算法
+│       ├── types.ts           # 类型定义
+│       ├── paipan.ts          # 排盘主入口
+│       ├── calendar.ts        # 农历/真太阳时
+│       ├── shensha-calc.ts    # 神煞推算
+│       ├── liuqin.ts          # 六亲配卦
+│       └── data/              # 六十四卦、神煞表、城市经纬度
+├── data/                       # 词汇 JSON + 五子棋排行榜
 └── styles/globals.css          # Tailwind 指令 + 全局样式
 ```
 
@@ -108,6 +126,32 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 2. Guest 1 等待 30s，无人加入自动解散
 3. 对局中落子 → postMessage → WebSocket `place-piece` → 服务器校验转发 `opponent-move`
 4. 服务器判定胜负 → 广播 `game-over`
+
+## 周易六爻排盘解卦
+
+### 架构
+
+```
+用户选择六爻 → paipan() 客户端排盘（毫秒级） → PaipanDisplay 展示
+  → POST /api/tools/yijing/interpret → DeepSeek API ×4（3 视角并行 + 1 综合）
+  → AIInterpret 展示
+```
+
+- `src/app/tools/yijing/page.tsx` — 主页面，表单 + 排盘 + AI 解卦
+- `src/app/api/tools/yijing/interpret/route.ts` — AI 解卦 API，多方交叉验证
+- `src/lib/yijing/paipan.ts` — 排盘主入口：四柱、卦象匹配、变卦、六亲、神煞
+- `src/lib/yijing/calendar.ts` — 农历/真太阳时（基于 `lunar-typescript`）
+- `src/lib/yijing/shensha-calc.ts` — 神煞推算（天乙贵人/文昌/禄神/驿马/桃花/华盖/亡神）
+- `src/lib/yijing/liuqin.ts` — 六亲配卦（宫五行 vs 爻五行生克）
+- `src/lib/yijing/data/bagua.ts` — 六十四卦完整数据（卦辞/爻辞/纳甲五行）
+- `src/lib/yijing/data/regions.ts` — ~280 个中国城市经纬度
+- `src/components/yijing/` — YaoSelector / PaipanDisplay / AIInterpret 组件
+
+### 解卦流程
+
+1. 3 个独立视角并行调用 DeepSeek：卦象解读(temp=0.3) / 动爻解读(temp=0.5) / 综合建议(temp=0.7)
+2. 结果汇总后第四次调用综合整合(temp=0.5)
+3. 单个视角失败时降级：跳过该视角，用剩余视角综合
 
 ## 服务器部署
 

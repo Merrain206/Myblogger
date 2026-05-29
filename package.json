@@ -19,6 +19,7 @@
     "gray-matter": "^4.0.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
+    "lunar-typescript": "^1.8.6",
     "next": "^15.3.0",
     "next-mdx-remote": "^5.0.0",
     "pdfjs-dist": "^5.7.284",

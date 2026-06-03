@@ -25,6 +25,13 @@ yarn-error.log*
 # vercel
 .vercel
 
+# user data (server-side archives)
+src/data/yijing-archives.json
+
+# hermes synced images (server-only)
+public/hermes/*
+!public/hermes/.gitkeep
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

@@ -77,7 +77,30 @@
       "Bash(wc *)",
       "Bash(find D:\\\\\\\\Codes\\\\\\\\Myblogger *)",
       "Bash(git *)",
-      "Bash(test -f \"D:\\\\\\\\Codes\\\\\\\\beforetask.md\")"
+      "Bash(test -f \"D:\\\\\\\\Codes\\\\\\\\beforetask.md\")",
+      "WebFetch(domain:www.merrain.cn)",
+      "Bash(grep -oP '\\\\d{5,6}\\(?=:\\)')",
+      "Bash(ssh-keygen -R 115.190.177.40)",
+      "Bash(ls -la claude_private.pem)",
+      "Bash(file claude_private.pem)",
+      "Bash(ls ~/.ssh/*.pem)",
+      "Bash(ls ~/.ssh/id_*)",
+      "Bash(ssh-keygen -R 82.157.193.186)",
+      "Bash(grep -oP '.{0,50}target.{0,50}')",
+      "Bash(grep -o \".{0,30}target.{0,30}\")",
+      "Bash(ECC_GATEGUARD=off unzip -l 26619139629000040247.zip)",
+      "Bash(kill 2716)",
+      "Bash(taskkill //F //PID 2716)",
+      "Bash(pkill -f \"next\")",
+      "Bash(fuser -k 3000/tcp)",
+      "Bash(npx kill-port *)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 41956 //F)",
+      "Bash(tasklist)",
+      "Bash(npx tailwindcss *)",
+      "Bash(cmd.exe *)",
+      "Bash(taskkill *)",
+      "Bash(start *)"
     ]
   }
 }

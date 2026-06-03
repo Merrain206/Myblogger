@@ -22,6 +22,29 @@ export interface TicketInfo {
   footerInfo: string;
   discountType: string;
   style: "blue" | "red";
+  invoiceNo: string;
+  electronicTicketNo: string;
+  issueDate: string;
+}
+
+/** 票号 = 电子客票号第4-12位 */
+function computeSerial(electronicTicketNo: string): string {
+  if (electronicTicketNo.length >= 12) {
+    return electronicTicketNo.slice(3, 12);
+  }
+  return "";
+}
+
+/** 底部售票信息 = 电子客票号前5位 + 发票号码最后5位 + 开票日期月日 + 电子客票号第6-12位 */
+function computeFooterInfo(invoiceNo: string, electronicTicketNo: string, issueDate: string): string {
+  if (electronicTicketNo.length >= 12 && invoiceNo.length >= 5 && issueDate.length >= 10) {
+    const part1 = electronicTicketNo.slice(0, 5);
+    const part2 = invoiceNo.slice(-5);
+    const monthDay = issueDate.slice(5, 7) + issueDate.slice(8, 10);
+    const part4 = electronicTicketNo.slice(5, 12);
+    return part1 + part2 + monthDay + part4;
+  }
+  return "";
 }
 
 const BASE_WIDTH = 856;
@@ -84,6 +107,7 @@ export default function TicketPreview({
       type: "svg",
       margin: 0,
       width: 148,
+      color: { light: "#00000000" },
     }).then(setQrSvg).catch(() => {});
   }, []);
 
@@ -96,8 +120,14 @@ export default function TicketPreview({
   const dt = parseDateTime(ticket.dateTime);
   const discountBadges = getDiscountTexts(ticket.discountType);
   const isBlue = ticket.style === "blue";
-  const bgImage = isBlue ? "url('/bluebg.png')" : "url('/redbg.png')";
-  const bgColor = isBlue ? "transparent" : "white";
+  const bgSrc = isBlue ? "/bluebg.png" : "/redbg.png";
+
+  const displaySerial = ticket.electronicTicketNo.length >= 12
+    ? computeSerial(ticket.electronicTicketNo)
+    : ticket.serial;
+  const displayFooterInfo = ticket.electronicTicketNo.length >= 12 && ticket.invoiceNo.length >= 5 && ticket.issueDate.length >= 10
+    ? computeFooterInfo(ticket.invoiceNo, ticket.electronicTicketNo, ticket.issueDate)
+    : ticket.footerInfo;
 
   const showHeader = isBlue;
 
@@ -113,28 +143,8 @@ export default function TicketPreview({
           width: BASE_WIDTH,
           height: BASE_HEIGHT,
           transform: exporting ? "none" : `scale(${scale})`,
-          backgroundImage: bgImage,
-          backgroundColor: bgColor,
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "bottom",
-          backgroundSize: "contain",
         }}
       >
-        {/* 条纹底纹 */}
-        <div
-          className="pointer-events-none absolute inset-0 z-0"
-          style={{
-            backgroundImage: `repeating-linear-gradient(
-              -45deg,
-              rgba(180,200,220,0.3) 0px,
-              rgba(180,200,220,0.3) 1px,
-              transparent 1px,
-              transparent 4px
-            )`,
-            backgroundSize: "4px 4px",
-          }}
-        />
-
         <div
           id="ticket-face"
           className="ticket-face relative z-10 flex h-full w-full flex-col overflow-hidden rounded-[14px] border border-[#b8cfe0]"
@@ -143,21 +153,44 @@ export default function TicketPreview({
             fontFamily: "'SimSun','宋体','PingFang SC','Microsoft YaHei',serif",
             fontWeight: 600,
             color: "#291e1e",
+            backgroundColor: isBlue ? "transparent" : "white",
           }}
         >
+          {/* 背景图层: 用 img 标签替代 CSS background-image, html2canvas 对 img 渲染更可靠 */}
+          <img
+            src={bgSrc}
+            alt=""
+            className="pointer-events-none absolute inset-0 z-0 h-full w-full"
+            style={{ objectFit: "cover" }}
+          />
+          {/* 条纹底纹 */}
+          <div
+            className="pointer-events-none absolute inset-0 z-[1]"
+            style={{
+              backgroundImage: `repeating-linear-gradient(
+                -45deg,
+                rgba(180,200,220,0.3) 0px,
+                rgba(180,200,220,0.3) 1px,
+                transparent 1px,
+                transparent 4px
+              )`,
+              backgroundSize: "4px 4px",
+            }}
+          />
+
           {/* ======== 顶部：票号 / 检票口 (仅蓝色) ======== */}
           {showHeader && (
             <div
-              className="flex items-center justify-between"
-              style={{ fontSize: 35, letterSpacing: 0.3 }}
+              className="relative z-10 flex items-center justify-between"
+              style={{ fontSize: 36, letterSpacing: 1 }}
             >
-              <div className="font-semibold text-[#e35757]">{ticket.serial}</div>
+              <div className="font-semibold text-[#e35757]">{displaySerial}</div>
               <div>检票：{ticket.gate}</div>
             </div>
           )}
 
           {/* ======== 主体内容区 ======== */}
-          <div className="flex-1">
+          <div className="relative z-10 flex-1">
             {/* 第一行：发站 / 车次+箭头 / 到站 */}
             <div
               className="grid items-center px-[20px]"
@@ -169,7 +202,7 @@ export default function TicketPreview({
               }}
             >
               {/* 发站 */}
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center" style={{ marginLeft: -40 }}>
                 <div className="flex items-center">
                   <span
                     className="station-name"
@@ -181,6 +214,7 @@ export default function TicketPreview({
                       minWidth: ticket.fromStation.length === 2 ? 145 : "auto",
                       textAlign: ticket.fromStation.length === 2 ? "justify" : "left",
                       textAlignLast: ticket.fromStation.length === 2 ? "justify" : "auto",
+                      letterSpacing: ticket.fromStation.length === 3 ? 5 : "normal",
                     }}
                   >
                     {ticket.fromStation}
@@ -194,24 +228,25 @@ export default function TicketPreview({
 
               {/* 车次 + 箭头 */}
               <div className="flex flex-col items-center justify-center">
-                <div style={{ fontSize: 50, lineHeight: 1, paddingBottom: 4 }}>
+                <div style={{ fontSize: 50, lineHeight: 0.5, paddingBottom: 2, fontFamily: "'Mongolian Baiti', 'SimSun', serif", fontWeight: 400, letterSpacing: 2 }}>
                   {ticket.trainCode}
                 </div>
-                <div className="relative mt-[6px] h-3 w-full">
-                  <div className="h-[4px] w-full bg-[#291e1e]" />
+                <div className="relative h-4 w-full" style={{ marginTop: 1, width: 145 }}>
+                  <div className="absolute bottom-0 left-0 h-[2px] bg-[#291e1e]" style={{ width: 145 }} />
                   <div
-                    className="absolute -top-[7px] right-0 h-4 w-4"
+                    className="absolute bottom-0 right-0 bg-[#291e1e]"
                     style={{
-                      borderTop: "4px solid #291e1e",
-                      borderRight: "4px solid #291e1e",
-                      transform: "rotate(45deg)",
+                      width: 21,
+                      height: 2,
+                      transform: "rotate(20deg)",
+                      transformOrigin: "right bottom",
                     }}
                   />
                 </div>
               </div>
 
               {/* 到站 */}
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center" style={{ marginRight: -40 }}>
                 <div className="flex items-center">
                   <span
                     className="station-name"
@@ -223,6 +258,7 @@ export default function TicketPreview({
                       minWidth: ticket.toStation.length === 2 ? 145 : "auto",
                       textAlign: ticket.toStation.length === 2 ? "justify" : "left",
                       textAlignLast: ticket.toStation.length === 2 ? "justify" : "auto",
+                      letterSpacing: ticket.toStation.length === 3 ? 5 : "normal",
                     }}
                   >
                     {ticket.toStation}
@@ -240,21 +276,31 @@ export default function TicketPreview({
               className="flex justify-between mt-[-10px]"
               style={{ paddingRight: 100, fontSize: 35 }}
             >
-              <div>
-                {dt.year}
-                <span style={{ fontSize: 24 }}>年</span>
-                {dt.month}
-                <span style={{ fontSize: 24 }}>月</span>
-                {dt.day}
-                <span style={{ fontSize: 24 }}>日</span>
-                {dt.time}
-                <span style={{ fontSize: 24 }}>开</span>
+              <div className="flex">
+                <span className="inline-flex items-baseline justify-center px-[4px]" style={{ minWidth: 100 }}>
+                  <span>{dt.year}</span>
+                  <span style={{ fontSize: 24 }}>年</span>
+                </span>
+                <span className="inline-flex items-baseline justify-center px-[4px]" style={{ minWidth: 64 }}>
+                  <span>{dt.month}</span>
+                  <span style={{ fontSize: 24 }}>月</span>
+                </span>
+                <span className="inline-flex items-baseline justify-center px-4px]" style={{ minWidth: 64 }}>
+                  <span>{dt.day}</span>
+                  <span style={{ fontSize: 24 }}>日</span>
+                </span>
+                <span className="inline-flex items-baseline justify-center px-[5px]" style={{ minWidth: 118 }}>
+                  <span>{dt.time}</span>
+                  <span style={{ fontSize: 24 }}>开</span>
+                </span>
               </div>
               <div>
                 {ticket.carriage}
                 <span style={{ fontSize: 24 }}>车</span>
                 {ticket.seatNumber}
-                <span style={{ fontSize: 24 }}>号</span>
+                {ticket.seatNumber !== "无座" && (
+                  <span style={{ fontSize: 24 }}>号</span>
+                )}
                 {ticket.berthType && (
                   <>
                     {ticket.berthType}
@@ -270,7 +316,7 @@ export default function TicketPreview({
               style={{ paddingRight: 100, fontSize: 35 }}
             >
               <div>
-                ￥{ticket.price}
+                <span style={{ fontWeight: 400 }}>￥</span>{ticket.price}
                 <span style={{ fontSize: 24 }}>元</span>
               </div>
               <div className="flex gap-[6px]">
@@ -278,25 +324,27 @@ export default function TicketPreview({
                   <span
                     key={i}
                     className="inline-flex items-center justify-center rounded-full border-[3px] border-[#291e1e] text-center leading-none"
-                    style={{ width: 36, height: 36, fontSize: 24 }}
+                    style={{ width: 44, height: 44, fontSize: 26 }}
                   >
                     {text}
                   </span>
                 ))}
               </div>
               <div className="flex items-center" style={{ gap: 12 }}>
-                {ticket.seatType}
+                <span style={ticket.seatType === "新空调硬座" || ticket.seatType === "硬卧代硬座" ? { display: "inline-block", transform: "translateX(60px)" } : undefined}>
+                  {ticket.seatNumber === "无座" ? "二等座" : ticket.seatType}
+                </span>
               </div>
             </div>
 
             <p className="text-[30px] text-[#666]">
               <br />
             </p>
-            <p className="text-[30px] text-[#666]">仅供纪念使用</p>
+            <p className="text-[30px] text-[#666] m-0 leading-none">仅供纪念使用</p>
 
             {/* ======== 底部区域：信息 + 二维码 ======== */}
             <div
-              className="relative mt-2"
+              className="relative"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 170px",
@@ -314,15 +362,8 @@ export default function TicketPreview({
                   style={{
                     fontSize: 24,
                     marginTop: -6,
-                    backgroundImage: `
-                      repeating-linear-gradient(to right, #291e1e, #291e1e 15px, transparent 15px, transparent 23px),
-                      repeating-linear-gradient(to bottom, #291e1e, #291e1e 15px, transparent 15px, transparent 23px),
-                      repeating-linear-gradient(to right, #291e1e, #291e1e 15px, transparent 15px, transparent 23px),
-                      repeating-linear-gradient(to bottom, #291e1e, #291e1e 15px, transparent 15px, transparent 23px)
-                    `,
-                    backgroundSize: "100% 2px, 2px 100%, 100% 2px, 2px 100%",
-                    backgroundPosition: "top left, top right, bottom left, top left",
-                    backgroundRepeat: "no-repeat",
+                    border: "2px dashed #291e1e",
+                    borderRadius: 4,
                   }}
                 >
                   {showHeader ? (
@@ -340,9 +381,10 @@ export default function TicketPreview({
 
                 {!showHeader && (
                   <div
-                    style={{ fontSize: 30, marginLeft: -40, height: 52 }}
+                    className="absolute bottom-0 z-10 flex h-[0px] items-center"
+                    style={{ width: 856, paddingLeft: 0, fontSize: 30 }}
                   >
-                    {ticket.footerInfo}
+                    {displayFooterInfo}  JM
                   </div>
                 )}
               </div>
@@ -359,14 +401,27 @@ export default function TicketPreview({
           {/* ======== 底部出票信息 (仅蓝色) ======== */}
           {showHeader && (
             <div
-              className="absolute bottom-0 left-0 flex h-[52px] items-center"
+              className="absolute bottom-0 left-0 z-10 flex h-[52px] items-center"
               style={{ width: 856, paddingLeft: 50, fontSize: 30 }}
             >
-              {ticket.footerInfo}
+              {displayFooterInfo}  JM
             </div>
           )}
         </div>
       </div>
+
+      {/* 背面（屏幕隐藏，打印时显示） */}
+      <div
+        id="ticket-back"
+        className="ticket-back hidden"
+        style={{
+          width: BASE_WIDTH,
+          height: BASE_HEIGHT,
+          borderRadius: 14,
+          border: "1px solid #b8cfe0",
+          backgroundColor: "white",
+        }}
+      />
     </div>
   );
 }

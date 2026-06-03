@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import TicketPreview, { type TicketInfo } from "@/components/TicketPreview";
@@ -22,14 +22,17 @@ const DEFAULT_TICKET: TicketInfo = {
   seatType: "一等座",
   idNumber: "3201021990****5678",
   passengerName: "张三",
-  footerInfo: "65773311920607K104567 北京南售",
+  footerInfo: "65773311920607K104567",
   discountType: "",
   style: "blue",
+  invoiceNo: "",
+  electronicTicketNo: "",
+  issueDate: "",
 };
 
 const SEAT_TYPES = [
   "一等座", "二等座", "商务座", "特等座",
-  "无座", "硬座", "软座",
+  "无座", "硬座", "软座", "新空调硬座", "硬卧代硬座",
   "软卧", "硬卧", "动卧", "高级软卧", "一等卧", "二等卧",
 ];
 const SLEEPER_TYPES = ["软卧", "硬卧", "动卧", "高级软卧", "一等卧", "二等卧"];
@@ -52,6 +55,7 @@ export default function TicketPage() {
   const [parsing, setParsing] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [showBetaNotice, setShowBetaNotice] = useState(true);
+  const [seatLetter, setSeatLetter] = useState("A");
   const ticketRef = useRef<HTMLDivElement>(null);
 
   const update = useCallback(
@@ -59,6 +63,27 @@ export default function TicketPage() {
       setTicket((prev) => ({ ...prev, [field]: value })),
     []
   );
+
+  // 当发票号码/电子客票号/开票日期变化时，自动计算票号和底部售票信息
+  useEffect(() => {
+    const { electronicTicketNo, invoiceNo, issueDate } = ticket;
+    setTicket((prev) => {
+      let next = { ...prev };
+      if (electronicTicketNo.length >= 12) {
+        const serial = electronicTicketNo.slice(3, 12);
+        if (serial !== prev.serial) next = { ...next, serial };
+        if (electronicTicketNo.length >= 12 && invoiceNo.length >= 5 && issueDate.length >= 10) {
+          const part1 = electronicTicketNo.slice(0, 5);
+          const part2 = invoiceNo.slice(-5);
+          const monthDay = issueDate.slice(5, 7) + issueDate.slice(8, 10);
+          const part4 = electronicTicketNo.slice(5, 12);
+          const footerInfo = part1 + part2 + monthDay + part4;
+          if (footerInfo !== prev.footerInfo) next = { ...next, footerInfo };
+        }
+      }
+      return next;
+    });
+  }, [ticket.electronicTicketNo, ticket.invoiceNo, ticket.issueDate]);
 
   const handleParse = useCallback(async () => {
     const text = rawText.trim();
@@ -102,10 +127,13 @@ export default function TicketPage() {
     if (!el) { setExporting(false); return; }
     try {
       const canvas = await html2canvas(el, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff",
+        scale: 3,
+        useCORS: true,
+        backgroundColor: null,
       });
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [54, 85.6] });
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 85.6, 54);
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [53.98, 85.6] });
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 85.6, 53.98);
+      pdf.addPage();
       pdf.save(`火车票_${ticket.trainCode}_${ticket.passengerName}.pdf`);
     } catch (e) {
       console.error("PDF 生成失败:", e);
@@ -116,13 +144,25 @@ export default function TicketPage() {
   const handlePrint = useCallback(() => window.print(), []);
 
   const isSleeper = SLEEPER_TYPES.includes(ticket.seatType);
+  const isDaiyingzuo = ticket.seatType === "硬卧代硬座";
 
   return (
     <>
       <style jsx global>{`
         @media print {
+          @page {
+            size: 85.6mm 53.98mm landscape;
+            margin: 0;
+          }
           nav, footer, button, form, .no-print { display: none !important; }
           body { background: white !important; }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .ticket-back {
+            display: block !important;
+          }
         }
       `}</style>
 
@@ -244,7 +284,32 @@ export default function TicketPage() {
                       <input className="input-sm" value={ticket.carriage} onChange={(e) => update("carriage", e.target.value)} />
                     </Field>
                     <Field label={isSleeper ? "铺位号" : "座位号"}>
-                      <input className="input-sm" value={ticket.seatNumber} onChange={(e) => update("seatNumber", e.target.value)} />
+                      {isDaiyingzuo ? (
+                        <div className="flex gap-1">
+                          <input
+                            className="input-sm flex-1"
+                            value={(() => { const s = ticket.seatNumber; return s && /[ABCD]$/.test(s) ? s.slice(0, -1) : s; })()}
+                            onChange={(e) => update("seatNumber", e.target.value + seatLetter)}
+                          />
+                          <select
+                            className="input-sm w-[52px]"
+                            value={seatLetter}
+                            onChange={(e) => {
+                              setSeatLetter(e.target.value);
+                              const s = ticket.seatNumber;
+                              const base = s && /[ABCD]$/.test(s) ? s.slice(0, -1) : s || "";
+                              update("seatNumber", base + e.target.value);
+                            }}
+                          >
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <input className="input-sm" value={ticket.seatNumber} onChange={(e) => update("seatNumber", e.target.value)} />
+                      )}
                     </Field>
                     {isSleeper && (
                       <Field label="铺位类型">
@@ -283,8 +348,21 @@ export default function TicketPage() {
                       <input className="input-sm" value={ticket.idNumber} onChange={(e) => update("idNumber", e.target.value)} />
                     </Field>
                     <div className="col-span-2">
-                      <Field label="底部售票信息">
-                        <input className="input-sm" value={ticket.footerInfo} onChange={(e) => update("footerInfo", e.target.value)} />
+                      <Field label="电子客票号">
+                        <input className="input-sm" value={ticket.electronicTicketNo} onChange={(e) => update("electronicTicketNo", e.target.value)} placeholder="如 20750A6*********541562025" />
+                      </Field>
+                    </div>
+                    <Field label="发票号码">
+                      <input className="input-sm" value={ticket.invoiceNo} onChange={(e) => update("invoiceNo", e.target.value)} placeholder="如 26419**********19624" />
+                    </Field>
+                    <div className="col-span-2">
+                      <Field label="开票日期">
+                        <input type="date" className="input-sm" value={ticket.issueDate} onChange={(e) => update("issueDate", e.target.value)} />
+                      </Field>
+                    </div>
+                    <div className="col-span-2">
+                      <Field label="底部售票信息（自动计算）">
+                        <input className="input-sm" value={ticket.footerInfo} onChange={(e) => update("footerInfo", e.target.value)} placeholder="自动拼接生成" />
                       </Field>
                     </div>
                   </div>

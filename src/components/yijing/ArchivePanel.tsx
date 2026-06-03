@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import type { PaipanResult, InterpretResult } from "@/lib/yijing/types";
 
 interface ArchiveRecord {
@@ -9,7 +12,7 @@ interface ArchiveRecord {
   question: string;
   gender: "男" | "女";
   paipan: PaipanResult;
-  interpret: InterpretResult;
+  interpret: InterpretResult | null;
 }
 
 const STORAGE_KEY = "yijing-archives";
@@ -24,82 +27,52 @@ function loadArchives(): ArchiveRecord[] {
   }
 }
 
-function saveArchives(records: ArchiveRecord[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  } catch {
-    // localStorage 满时静默失败
-  }
-}
-
-export default function ArchivePanel({
-  paipan,
-  interpret,
-}: {
-  paipan: PaipanResult | null;
-  interpret: InterpretResult | null;
-}) {
+export default function ArchivePanel() {
   const [archives, setArchives] = useState<ArchiveRecord[]>([]);
   const [expanded, setExpanded] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
 
   useEffect(() => {
     setArchives(loadArchives());
+    // 从服务端加载存档，与本地合并去重
+    fetch("/api/tools/yijing/archives")
+      .then((r) => r.json())
+      .then((serverData: ArchiveRecord[]) => {
+        if (!Array.isArray(serverData) || serverData.length === 0) return;
+        const local = loadArchives();
+        const merged = new Map<string, ArchiveRecord>();
+        for (const a of [...serverData, ...local]) {
+          if (!merged.has(a.id) || a.timestamp > merged.get(a.id)!.timestamp) {
+            merged.set(a.id, a);
+          }
+        }
+        const sorted = Array.from(merged.values()).sort((a, b) => b.timestamp - a.timestamp);
+        setArchives(sorted);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted)); } catch {}
+      })
+      .catch(() => {});
+    const onUpdate = () => setArchives(loadArchives());
+    window.addEventListener("yijing-archive-updated", onUpdate);
+    return () => window.removeEventListener("yijing-archive-updated", onUpdate);
   }, []);
-
-  const handleSave = useCallback(() => {
-    if (!paipan || !interpret) return;
-    const record: ArchiveRecord = {
-      id: Date.now().toString(36),
-      timestamp: Date.now(),
-      question: paipan.title,
-      gender: paipan.gender,
-      paipan,
-      interpret,
-    };
-    const updated = [record, ...archives];
-    setArchives(updated);
-    saveArchives(updated);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }, [paipan, interpret, archives]);
 
   const handleDelete = useCallback((id: string) => {
     const updated = archives.filter((a) => a.id !== id);
     setArchives(updated);
-    saveArchives(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // localStorage 满时静默失败
+    }
+    // 同步删除服务端（静默降级）
+    fetch(`/api/tools/yijing/archives?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
     if (viewingId === id) setViewingId(null);
   }, [archives, viewingId]);
 
   const viewing = archives.find((a) => a.id === viewingId);
 
-  const hasSaved = archives.some(
-    (a) => a.question === paipan?.title && a.paipan === paipan
-  );
-
   return (
     <div className="rounded-xl border border-[#D4C5A0]/60 bg-white dark:border-slate-600 dark:bg-slate-800">
-      {/* 保存按钮 */}
-      {paipan && interpret && (
-        <div className="border-b border-[#D4C5A0]/60 px-5 py-3 dark:border-slate-600">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!!hasSaved || saved}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-              saved
-                ? "bg-emerald-50 text-emerald-600 border border-emerald-300 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700"
-                : hasSaved
-                  ? "bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed dark:bg-slate-700/30 dark:text-slate-500 dark:border-slate-600"
-                  : "border border-[#C9A96E] bg-[#FDF8F0] text-[#8B6914] hover:bg-[#C9A96E]/10 dark:border-[#B8956E] dark:bg-slate-800 dark:text-[#C9A96E] dark:hover:bg-[#B8956E]/15"
-            }`}
-          >
-            {saved ? "已保存" : hasSaved ? "已保存过" : "保存结果"}
-          </button>
-        </div>
-      )}
-
       {/* 存档列表 */}
       <div
         className="flex cursor-pointer items-center justify-between px-5 py-3 select-none"
@@ -142,9 +115,20 @@ export default function ArchivePanel({
                 本卦：{viewing.paipan.baseHexagram.name}
                 {viewing.paipan.changedHexagram && ` → ${viewing.paipan.changedHexagram.name}`}
               </div>
-              <div className="prose prose-sm prose-slate max-w-none dark:prose-invert whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">
-                {viewing.interpret.synthesis}
-              </div>
+              {viewing.interpret ? (
+                <div className="prose prose-sm prose-slate max-w-none dark:prose-invert
+                  prose-headings:text-[#8B6914] dark:prose-headings:text-[#C9A96E]
+                  prose-a:text-[#C9A96E]
+                  prose-strong:text-slate-800 dark:prose-strong:text-slate-200
+                  prose-li:marker:text-[#C9A96E]
+                ">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                    {viewing.interpret.synthesis}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">未进行 AI 解读</p>
+              )}
             </div>
           ) : (
             <div className="mt-3 space-y-2">

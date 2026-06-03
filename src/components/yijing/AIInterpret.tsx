@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import type { InterpretResult } from "@/lib/yijing/types";
 
 export default function AIInterpret({ result }: { result: InterpretResult }) {
@@ -43,7 +44,7 @@ export default function AIInterpret({ result }: { result: InterpretResult }) {
           prose-strong:text-slate-800 dark:prose-strong:text-slate-200
           prose-li:marker:text-[#C9A96E]
         ">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
             {content}
           </ReactMarkdown>
         </div>

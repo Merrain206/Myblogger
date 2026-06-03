@@ -22,6 +22,16 @@ const tools = [
     ),
   },
   {
+    title: "Hermes 图片同步",
+    description: "从 Hermes Agent 同步 SVG/Mermaid/ECharts 图表到博客，支持在线预览和下载。",
+    href: "/tools/hermes",
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
     title: "构词法记单词",
     description: "通过词根、前缀、后缀分解记忆，涵盖 CET4/CET6 词汇，支持闪卡和学习模式。",
     href: "/vocabulary",

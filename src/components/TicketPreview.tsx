@@ -299,17 +299,23 @@ export default function TicketPreview({
                 </span>
               </div>
               <div style={["软卧", "硬卧", "动卧", "高级软卧", "一等卧", "二等卧"].includes(ticket.seatType) ? { display: "inline-block", transform: "translateX(35px)" } : undefined}>
-                {ticket.carriage}
-                <span style={{ fontSize: 24 }}>车</span>
-                {seatNum}
-                {ticket.seatNumber !== "无座" && (
-                  <span style={{ fontSize: 24 }}>号</span>
-                )}
-                {seatLetter}
-                {ticket.berthType && (
+                {ticket.seatType === "不对号入座" ? (
+                  <span style={{ display: "inline-block", transform: "translateX(40px)" }}>{ticket.seatType}</span>
+                ) : (
                   <>
-                    {ticket.berthType}
-                    <span style={{ fontSize: 24 }}>铺</span>
+                    {ticket.carriage}
+                    <span style={{ fontSize: 24 }}>车</span>
+                    {seatNum}
+                    {ticket.seatNumber !== "无座" && (
+                      <span style={{ fontSize: 24 }}>号</span>
+                    )}
+                    {seatLetter}
+                    {ticket.berthType && (
+                      <>
+                        {ticket.berthType}
+                        <span style={{ fontSize: 24 }}>铺</span>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -335,11 +341,13 @@ export default function TicketPreview({
                   </span>
                 ))}
               </div>
-              <div className="flex items-center" style={{ gap: 12 }}>
-                <span style={ticket.seatType === "新空调硬座" || ticket.seatType === "硬卧代硬座" ? { display: "inline-block", transform: "translateX(60px)" } : ticket.seatType === "高级软卧" ? { display: "inline-block", transform: "translateX(40px)" } : undefined}>
-                  {ticket.seatNumber === "无座" ? "二等座" : ticket.seatType}
-                </span>
-              </div>
+              {ticket.seatType !== "不对号入座" && (
+                <div className="flex items-center" style={{ gap: 12 }}>
+                  <span style={ticket.seatType === "新空调硬座" || ticket.seatType === "硬卧代硬座" ? { display: "inline-block", transform: "translateX(60px)" } : ticket.seatType === "高级软卧" ? { display: "inline-block", transform: "translateX(40px)" } : undefined}>
+                    {ticket.seatType}
+                  </span>
+                </div>
+              )}
             </div>
 
             <p className="text-[30px] text-[#666]">

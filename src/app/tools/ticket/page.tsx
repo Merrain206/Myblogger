@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
+
 import TicketPreview, { type TicketInfo } from "@/components/TicketPreview";
 
 
@@ -50,7 +49,6 @@ const DISCOUNT_OPTIONS = [
 
 export default function TicketPage() {
   const [ticket, setTicket] = useState<TicketInfo>(DEFAULT_TICKET);
-  const [exporting, setExporting] = useState(false);
   const [rawText, setRawText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [importStatus, setImportStatus] = useState("");
@@ -58,6 +56,9 @@ export default function TicketPage() {
   const [showGate, setShowGate] = useState(true);
   const [seatLetter, setSeatLetter] = useState("A");
   const ticketRef = useRef<HTMLDivElement>(null);
+  const [batchTickets, setBatchTickets] = useState<TicketInfo[]>([]);
+  const [isBatchPrinting, setIsBatchPrinting] = useState(false);
+  const [isSinglePrinting, setIsSinglePrinting] = useState(false);
 
   const update = useCallback(
     (field: keyof TicketInfo, value: string) =>
@@ -119,65 +120,95 @@ export default function TicketPage() {
     setParsing(false);
   }, [rawText]);
 
-  // ======== 下载 PDF ========
-  const handleDownloadPDF = useCallback(async () => {
-    setExporting(true);
+  const handlePrint = useCallback(async () => {
+    setIsSinglePrinting(true);
+
+    // 等待打印专用 DOM 渲染完成
     await new Promise((r) => requestAnimationFrame(r));
-    await new Promise((r) => setTimeout(r, 100));
-    const faceEl = document.getElementById("ticket-face");
-    const backEl = document.getElementById("ticket-back");
-    if (!faceEl) { setExporting(false); return; }
-    try {
-      const faceCanvas = await html2canvas(faceEl, {
-        scale: 3,
-        useCORS: true,
-        backgroundColor: null,
-      });
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [53.98, 85.6] });
-      pdf.addImage(faceCanvas.toDataURL("image/png"), "PNG", 0, 0, 85.6, 53.98);
+    await new Promise((r) => setTimeout(r, 400));
 
-      // 背面
-      if (backEl) {
-        const backCanvas = await html2canvas(backEl, {
-          scale: 3,
-          useCORS: true,
-          backgroundColor: null,
-        });
-        pdf.addPage([53.98, 85.6]);
-        pdf.addImage(backCanvas.toDataURL("image/png"), "PNG", 0, 0, 85.6, 53.98);
-      } else {
-        pdf.addPage();
-      }
-
-      pdf.save(`火车票_${ticket.trainCode}_${ticket.passengerName}.pdf`);
-    } catch (e) {
-      console.error("PDF 生成失败:", e);
-    }
-    setExporting(false);
+    const cleanup = () => setIsSinglePrinting(false);
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
   }, [ticket]);
 
-  const handlePrint = useCallback(() => window.print(), []);
+  // ======== 批量导出 ========
+  const addToBatch = useCallback(() => {
+    setBatchTickets((prev) => [...prev, { ...ticket }]);
+  }, [ticket]);
+
+  const removeFromBatch = useCallback((index: number) => {
+    setBatchTickets((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const clearBatch = useCallback(() => setBatchTickets([]), []);
+
+  const handleBatchPrint = useCallback(async () => {
+    if (batchTickets.length === 0) return;
+    setIsBatchPrinting(true);
+
+    // 等待打印专用 DOM 渲染完成
+    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => setTimeout(r, 500));
+
+    const cleanup = () => setIsBatchPrinting(false);
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.print();
+  }, [batchTickets]);
 
   const isSleeper = SLEEPER_TYPES.includes(ticket.seatType);
   const isDaiyingzuo = ticket.seatType === "硬卧代硬座";
   const isNotSeated = ticket.seatType === "不对号入座";
 
+  const printPageSize = (isBatchPrinting || isSinglePrinting)
+    ? "A4 portrait"
+    : "85.6mm 53.98mm landscape";
+
+  const printPageMargin = (isBatchPrinting || isSinglePrinting) ? "3mm" : "0";
+
   return (
     <>
+      <style>{`@page { size: ${printPageSize}; margin: ${printPageMargin}; }`}</style>
       <style jsx global>{`
         .input-sm { width: 103%; }
+
+        /* 打印专用元素：屏幕隐藏 */
+        .print-only { display: none; }
+
         @media print {
-          @page {
-            size: 85.6mm 53.98mm landscape;
-            margin: 0;
-          }
+          html, body { margin: 0 !important; padding: 0 !important; }
           nav, footer, button, form, .no-print { display: none !important; }
           body { background: white !important; }
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          #ticket-back { page-break-before: always; }
+
+          .print-only { display: block !important; }
+
+          /* A4 竖版页面 */
+          .print-a4-page {
+            width: 210mm;
+            height: 297mm;
+            position: relative;
+            overflow: hidden;
+            page-break-after: always;
+          }
+          .print-a4-page:last-child { page-break-after: avoid; }
+
+          /* 批量：四角各一槽位，物理尺寸 */
+          .print-ticket-slot {
+            position: absolute;
+            width: 85.6mm;
+            height: 107.96mm;
+            overflow: hidden;
+            contain: strict;
+          }
+          .print-ticket-slot > div {
+            width: 856px !important;
+            transform: scale(0.378) !important;
+            transform-origin: 0 0 !important;
+          }
         }
       `}</style>
 
@@ -400,21 +431,91 @@ export default function TicketPage() {
                 </div>
               </div>
 
-              {/* 导出按钮 */}
-              <div className="mt-5 flex gap-3">
-                <button onClick={handleDownloadPDF} className="flex-1 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition-all hover:bg-primary-600">
-                  下载 PDF
-                </button>
-                <button onClick={handlePrint} className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+              {/* 打印按钮 */}
+              <div className="mt-5">
+                <button onClick={handlePrint} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:border-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
                   直接打印
                 </button>
+              </div>
+
+              {/* 批量导出 */}
+              <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-700">
+                <button
+                  onClick={addToBatch}
+                  disabled={batchTickets.length >= 4}
+                  className="w-full rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 px-4 py-2.5 text-sm font-semibold text-slate-600 transition-all hover:border-primary-400 hover:bg-primary-50 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:border-primary-500 dark:hover:bg-primary-900/20 dark:hover:text-primary-400"
+                >
+                  {batchTickets.length >= 4 ? "已满（最多 4 张）" : "+ 加入批量列表"}
+                </button>
+
+                {batchTickets.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        批量列表 ({batchTickets.length} 张)
+                      </span>
+                      <button
+                        onClick={clearBatch}
+                        className="text-xs text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
+                      >
+                        清空列表
+                      </button>
+                    </div>
+
+                    <div className="max-h-[240px] space-y-1.5 overflow-y-auto">
+                      {batchTickets.map((bt, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50"
+                        >
+                          <span className="shrink-0 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0 flex-1 text-xs text-slate-700 dark:text-slate-300">
+                            <span className="font-medium">{bt.fromStation}</span>
+                            <span className="mx-1 text-slate-400">→</span>
+                            <span className="font-medium">{bt.toStation}</span>
+                            <span className="ml-2 text-slate-500">{bt.trainCode}</span>
+                            <span className="ml-2 text-slate-500">{bt.dateTime.slice(0, 10)}</span>
+                            <span className="ml-2 text-slate-500">{bt.passengerName}</span>
+                            <span className="ml-2 text-slate-500">{bt.seatType}</span>
+                            <span className="ml-1 text-slate-500">¥{bt.price}</span>
+                          </div>
+                          <button
+                            onClick={() => removeFromBatch(i)}
+                            className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-red-100 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={handleBatchPrint}
+                      disabled={isBatchPrinting}
+                      className="w-full rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/25 transition-all hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      批量打印 ({batchTickets.length} 张)
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* ======== 车票预览区 ======== */}
-          <div className="flex-1" ref={ticketRef}>
+          <div className="flex-1 no-print" ref={ticketRef}>
             <div className="sticky top-24">
+              {(isSinglePrinting || isBatchPrinting) && (
+                <div className="no-print mb-3 rounded-lg bg-primary-50 px-4 py-2.5 text-sm font-medium text-primary-600 dark:bg-primary-900/20 dark:text-primary-400">
+                  {isSinglePrinting
+                    ? "正在准备打印，请在弹出的打印对话框中确认..."
+                    : `正在准备批量打印 ${batchTickets.length} 张车票，请在弹出的打印对话框中确认...`}
+                </div>
+              )}
               <div className="no-print mb-3 flex items-center gap-3">
                 <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">预览</h3>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -425,11 +526,53 @@ export default function TicketPage() {
                   {ticket.style === "blue" ? "报销凭证样式" : "纪念票样式"}
                 </span>
               </div>
-              <TicketPreview ticket={ticket} exporting={exporting} showGate={showGate} />
+              <TicketPreview ticket={ticket} exporting={false} showGate={showGate} />
             </div>
           </div>
         </div>
       </div>
+
+      {/* 单张打印专用 DOM：屏幕隐藏，打印时可见，位置与批量第一张一致 */}
+      {isSinglePrinting && (
+        <div className="print-only">
+          <div className="print-a4-page">
+            <div className="print-ticket-slot" style={{ top: "8mm", left: "14mm" }}>
+              <div style={{ width: 856 }}>
+                <TicketPreview ticket={ticket} exporting={true} showGate={showGate} idPrefix="single-print" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 批量打印专用 DOM：A4 竖版，四角各一张车票正反面 */}
+      {isBatchPrinting && (
+        <div className="print-only">
+          {Array.from({ length: Math.ceil(batchTickets.length / 4) }).map((_, pageIdx) => (
+            <div key={pageIdx} className="print-a4-page">
+              {[0, 1, 2, 3].map((slot) => {
+                const ticketIdx = pageIdx * 4 + slot;
+                if (ticketIdx >= batchTickets.length) return null;
+                const bt = batchTickets[ticketIdx];
+                // 固定四角定位：上排 top=8mm，下排 top=8+107.96+20=135.96mm
+                const POSITIONS: React.CSSProperties[] = [
+                  { top: "8mm", left: "14mm" },
+                  { top: "8mm", right: "14mm" },
+                  { top: "135.96mm", left: "14mm" },
+                  { top: "135.96mm", right: "14mm" },
+                ];
+                return (
+                  <div key={slot} className="print-ticket-slot" style={POSITIONS[slot]}>
+                    <div style={{ width: 856 }}>
+                      <TicketPreview ticket={bt} exporting={true} showGate={showGate} idPrefix={`batch-print-${ticketIdx}`} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 实验性功能悬浮提醒 */}
       {showBetaNotice && (

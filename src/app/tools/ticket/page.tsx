@@ -124,17 +124,31 @@ export default function TicketPage() {
     setExporting(true);
     await new Promise((r) => requestAnimationFrame(r));
     await new Promise((r) => setTimeout(r, 100));
-    const el = document.getElementById("ticket-face");
-    if (!el) { setExporting(false); return; }
+    const faceEl = document.getElementById("ticket-face");
+    const backEl = document.getElementById("ticket-back");
+    if (!faceEl) { setExporting(false); return; }
     try {
-      const canvas = await html2canvas(el, {
+      const faceCanvas = await html2canvas(faceEl, {
         scale: 3,
         useCORS: true,
         backgroundColor: null,
       });
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [53.98, 85.6] });
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 85.6, 53.98);
-      pdf.addPage();
+      pdf.addImage(faceCanvas.toDataURL("image/png"), "PNG", 0, 0, 85.6, 53.98);
+
+      // 背面
+      if (backEl) {
+        const backCanvas = await html2canvas(backEl, {
+          scale: 3,
+          useCORS: true,
+          backgroundColor: null,
+        });
+        pdf.addPage([53.98, 85.6]);
+        pdf.addImage(backCanvas.toDataURL("image/png"), "PNG", 0, 0, 85.6, 53.98);
+      } else {
+        pdf.addPage();
+      }
+
       pdf.save(`火车票_${ticket.trainCode}_${ticket.passengerName}.pdf`);
     } catch (e) {
       console.error("PDF 生成失败:", e);
@@ -163,9 +177,7 @@ export default function TicketPage() {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          .ticket-back {
-            display: block !important;
-          }
+          #ticket-back { page-break-before: always; }
         }
       `}</style>
 
@@ -431,7 +443,7 @@ export default function TicketPage() {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">实验性功能</p>
               <p className="mt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-                此工具尚在试验阶段，AI 解析和票面效果可能不够完美，仅供娱乐参考。
+                此工具尚在试验阶段，AI 解析和票面效果可能不够完美，仅供娱乐参考；严禁用于非法用途，请遵守相关法律法规。
               </p>
             </div>
             <button

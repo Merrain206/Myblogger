@@ -41,8 +41,8 @@ npm run lint       # ESLint 检查
 | react-markdown | AI 解卦结果 Markdown 渲染 |
 | date-fns | 日期格式化 |
 | lunar-typescript | 农历/干支/节气计算（周易工具） |
-| html2canvas | 车票 DOM 截图导出 PDF |
-| jspdf | 车票 PDF 生成 |
+| html2canvas | 车票 DOM 截图（历史依赖，当前打印方案未使用） |
+| jspdf | 车票 PDF 生成（历史依赖，当前打印方案未使用） |
 | qrcode | 车票二维码生成 |
 
 ## 架构
@@ -197,18 +197,18 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 ```
 表单填写 / AI 文本识别（POST /api/tools/ticket/parse → DeepSeek）
   → TicketPreview 组件实时预览（856×540 基准尺寸，自适应缩放）
-  → 下载 PDF（html2canvas 截图 → jsPDF 写入） / 浏览器直接打印
+  → 浏览器直接打印 / 批量打印（@page 规格对齐物理尺寸，自动分页正反面）
 ```
 
-- `src/app/tools/ticket/page.tsx` — 主页面，表单编辑 + AI 解析 + PDF/打印导出
+- `src/app/tools/ticket/page.tsx` — 主页面，表单编辑 + AI 解析 + 打印导出
 - `src/app/api/tools/ticket/parse/route.ts` — AI 文本解析 API，从 12306 电子发票原始文本提取字段
-- `src/components/TicketPreview.tsx` — 车票预览组件，支持蓝票/红票双样式，含背面空白页
+- `src/components/TicketPreview.tsx` — 车票预览组件，支持蓝票/红票双样式，含背面内容，打印导出
 
 ### 技术要点
 
 - **物理规格**：85.6mm × 53.98mm（PDF 和直接打印统一），正反面相同尺寸
 - **背面**：PDF 第二页 + 打印 @page 第二页，屏幕隐藏，预留后期添加内容
-- **背景渲染**：使用 `<img>` 标签而非 CSS `background-image`，因 html2canvas 对 img 元素渲染更可靠
+- **背景渲染**：使用 `<img>` 标签而非 CSS `background-image`，渲染更可靠
 - **字体设置**：站名用 SimHei/黑体，正文用 SimSun/宋体，车次用 Mongolian Baiti
 - **扫描件效果**：条纹底纹用 CSS repeating-linear-gradient 模拟
 - **二维码**：qrcode 库生成 SVG，`color.light: "#00000000"` 透明底色

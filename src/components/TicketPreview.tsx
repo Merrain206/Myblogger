@@ -90,11 +90,13 @@ export default function TicketPreview({
   exporting,
   showGate,
   idPrefix,
+  backRotated = false,
 }: {
   ticket: TicketInfo;
   exporting: boolean;
   showGate: boolean;
   idPrefix?: string;
+  backRotated?: boolean;
 }) {
   const faceId = idPrefix ? `${idPrefix}-face` : "ticket-face";
   const backId = idPrefix ? `${idPrefix}-back` : "ticket-back";
@@ -444,6 +446,7 @@ export default function TicketPreview({
               fontSize: 23,
               lineHeight: 1.55,
               overflow: "hidden",
+              transform: backRotated ? "rotate(180deg)" : undefined,
             }}
           >
             <h2 style={{ textAlign: "center", fontSize: 35, fontWeight: 600, margin: "0 0 12px 0", fontFamily: "'SimHei','黑体','PingFang SC',sans-serif" }}>
@@ -474,6 +477,7 @@ export default function TicketPreview({
               overflow: "visible",
               display: "flex",
               flexDirection: "column",
+              transform: backRotated ? "rotate(180deg)" : undefined,
             }}
           >
             <p style={{ textIndent: "3em", margin: 0, flex: 1 }}>

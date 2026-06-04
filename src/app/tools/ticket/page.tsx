@@ -32,7 +32,7 @@ const DEFAULT_TICKET: TicketInfo = {
 
 const SEAT_TYPES = [
   "一等座", "二等座", "商务座", "特等座",
-  "无座", "硬座", "软座", "新空调硬座", "硬卧代硬座",
+  "无座", "不对号入座", "硬座", "软座", "新空调硬座", "硬卧代硬座",
   "软卧", "硬卧", "动卧", "高级软卧", "一等卧", "二等卧",
 ];
 const SLEEPER_TYPES = ["软卧", "硬卧", "动卧", "高级软卧", "一等卧", "二等卧"];
@@ -146,6 +146,7 @@ export default function TicketPage() {
 
   const isSleeper = SLEEPER_TYPES.includes(ticket.seatType);
   const isDaiyingzuo = ticket.seatType === "硬卧代硬座";
+  const isNotSeated = ticket.seatType === "不对号入座";
 
   return (
     <>
@@ -293,38 +294,42 @@ export default function TicketPage() {
                 <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
                   <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">座位 / 价格</div>
                   <div className="grid grid-cols-2 gap-2">
-                    <Field label="车厢号">
-                      <input className="input-sm" value={ticket.carriage} onChange={(e) => update("carriage", e.target.value)} />
-                    </Field>
-                    <Field label={isSleeper ? "铺位号" : "座位号"}>
-                      {isDaiyingzuo ? (
-                        <div className="flex gap-1">
-                          <input
-                            className="input-sm"
-                            style={{ width: 80 }}
-                            value={(() => { const s = ticket.seatNumber; return s && /[ABCD]$/.test(s) ? s.slice(0, -1) : s; })()}
-                            onChange={(e) => update("seatNumber", e.target.value + seatLetter)}
-                          />
-                          <select
-                            className="input-sm !w-[52px]"
-                            value={seatLetter}
-                            onChange={(e) => {
-                              setSeatLetter(e.target.value);
-                              const s = ticket.seatNumber;
-                              const base = s && /[ABCD]$/.test(s) ? s.slice(0, -1) : s || "";
-                              update("seatNumber", base + e.target.value);
-                            }}
-                          >
-                            <option value="A">A</option>
-                            <option value="B">B</option>
-                            <option value="C">C</option>
-                            <option value="D">D</option>
-                          </select>
-                        </div>
-                      ) : (
-                        <input className="input-sm" style={{ width: 80 }} value={ticket.seatNumber} onChange={(e) => update("seatNumber", e.target.value)} />
-                      )}
-                    </Field>
+                    {!isNotSeated && (
+                      <Field label="车厢号">
+                        <input className="input-sm" value={ticket.carriage} onChange={(e) => update("carriage", e.target.value)} />
+                      </Field>
+                    )}
+                    {!isNotSeated && (
+                      <Field label={isSleeper ? "铺位号" : "座位号"}>
+                        {isDaiyingzuo ? (
+                          <div className="flex gap-1">
+                            <input
+                              className="input-sm"
+                              style={{ width: 80 }}
+                              value={(() => { const s = ticket.seatNumber; return s && /[ABCD]$/.test(s) ? s.slice(0, -1) : s; })()}
+                              onChange={(e) => update("seatNumber", e.target.value + seatLetter)}
+                            />
+                            <select
+                              className="input-sm !w-[52px]"
+                              value={seatLetter}
+                              onChange={(e) => {
+                                setSeatLetter(e.target.value);
+                                const s = ticket.seatNumber;
+                                const base = s && /[ABCD]$/.test(s) ? s.slice(0, -1) : s || "";
+                                update("seatNumber", base + e.target.value);
+                              }}
+                            >
+                              <option value="A">A</option>
+                              <option value="B">B</option>
+                              <option value="C">C</option>
+                              <option value="D">D</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <input className="input-sm" style={{ width: 80 }} value={ticket.seatNumber} onChange={(e) => update("seatNumber", e.target.value)} />
+                        )}
+                      </Field>
+                    )}
                     {isSleeper && (
                       <Field label="铺位类型">
                         <select className="input-sm" value={ticket.berthType} onChange={(e) => update("berthType", e.target.value)}>
@@ -335,7 +340,7 @@ export default function TicketPage() {
                         </select>
                       </Field>
                     )}
-                    <Field label="席别">
+                    <Field label="席别" className={isNotSeated ? "col-span-2" : undefined}>
                       <select className="input-sm" value={ticket.seatType} onChange={(e) => update("seatType", e.target.value)}>
                         {SEAT_TYPES.map((s) => (<option key={s} value={s}>{s}</option>))}
                       </select>
@@ -445,9 +450,9 @@ export default function TicketPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <label className="block">
+    <label className={`block${className ? " " + className : ""}`}>
       <span className="mb-0.5 block text-[11px] font-medium text-slate-400 dark:text-slate-500">{label}</span>
       {children}
     </label>

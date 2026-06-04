@@ -56,9 +56,10 @@ export default function TicketPage() {
   const [showGate, setShowGate] = useState(true);
   const [seatLetter, setSeatLetter] = useState("A");
   const ticketRef = useRef<HTMLDivElement>(null);
-  const [batchTickets, setBatchTickets] = useState<TicketInfo[]>([]);
+  const [batchTickets, setBatchTickets] = useState<{ ticket: TicketInfo; backRotated: boolean }[]>([]);
   const [isBatchPrinting, setIsBatchPrinting] = useState(false);
   const [isSinglePrinting, setIsSinglePrinting] = useState(false);
+  const [backRotated, setBackRotated] = useState(false);
 
   const update = useCallback(
     (field: keyof TicketInfo, value: string) =>
@@ -134,8 +135,8 @@ export default function TicketPage() {
 
   // ======== 批量导出 ========
   const addToBatch = useCallback(() => {
-    setBatchTickets((prev) => [...prev, { ...ticket }]);
-  }, [ticket]);
+    setBatchTickets((prev) => [...prev, { ticket: { ...ticket }, backRotated }]);
+  }, [ticket, backRotated]);
 
   const removeFromBatch = useCallback((index: number) => {
     setBatchTickets((prev) => prev.filter((_, i) => i !== index));
@@ -279,13 +280,24 @@ export default function TicketPage() {
               </div>
 
               {/* 检票口开关 */}
-              <div className="mb-4 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+              <div className="mb-2 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-400">显示检票口</span>
                 <button
                   onClick={() => setShowGate((v) => !v)}
                   className={`relative h-5 w-9 rounded-full transition-colors ${showGate ? "bg-primary-500" : "bg-slate-300 dark:bg-slate-600"}`}
                 >
                   <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${showGate ? "left-4 translate-x-0.5" : "left-0.5"}`} />
+                </button>
+              </div>
+
+              {/* 背面旋转开关 */}
+              <div className="mb-4 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">背面旋转 180°</span>
+                <button
+                  onClick={() => setBackRotated((v) => !v)}
+                  className={`relative h-5 w-9 rounded-full transition-colors ${backRotated ? "bg-primary-500" : "bg-slate-300 dark:bg-slate-600"}`}
+                >
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${backRotated ? "left-4 translate-x-0.5" : "left-0.5"}`} />
                 </button>
               </div>
 
@@ -463,7 +475,7 @@ export default function TicketPage() {
                     </div>
 
                     <div className="max-h-[240px] space-y-1.5 overflow-y-auto">
-                      {batchTickets.map((bt, i) => (
+                      {batchTickets.map((item, i) => (
                         <div
                           key={i}
                           className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50"
@@ -472,14 +484,17 @@ export default function TicketPage() {
                             {i + 1}
                           </span>
                           <div className="min-w-0 flex-1 text-xs text-slate-700 dark:text-slate-300">
-                            <span className="font-medium">{bt.fromStation}</span>
+                            <span className="font-medium">{item.ticket.fromStation}</span>
                             <span className="mx-1 text-slate-400">→</span>
-                            <span className="font-medium">{bt.toStation}</span>
-                            <span className="ml-2 text-slate-500">{bt.trainCode}</span>
-                            <span className="ml-2 text-slate-500">{bt.dateTime.slice(0, 10)}</span>
-                            <span className="ml-2 text-slate-500">{bt.passengerName}</span>
-                            <span className="ml-2 text-slate-500">{bt.seatType}</span>
-                            <span className="ml-1 text-slate-500">¥{bt.price}</span>
+                            <span className="font-medium">{item.ticket.toStation}</span>
+                            <span className="ml-2 text-slate-500">{item.ticket.trainCode}</span>
+                            <span className="ml-2 text-slate-500">{item.ticket.dateTime.slice(0, 10)}</span>
+                            <span className="ml-2 text-slate-500">{item.ticket.passengerName}</span>
+                            <span className="ml-2 text-slate-500">{item.ticket.seatType}</span>
+                            <span className="ml-1 text-slate-500">¥{item.ticket.price}</span>
+                            {item.backRotated && (
+                              <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">背面已旋转</span>
+                            )}
                           </div>
                           <button
                             onClick={() => removeFromBatch(i)}
@@ -526,7 +541,7 @@ export default function TicketPage() {
                   {ticket.style === "blue" ? "报销凭证样式" : "纪念票样式"}
                 </span>
               </div>
-              <TicketPreview ticket={ticket} exporting={false} showGate={showGate} />
+              <TicketPreview ticket={ticket} exporting={false} showGate={showGate} backRotated={backRotated} />
             </div>
           </div>
         </div>
@@ -538,7 +553,7 @@ export default function TicketPage() {
           <div className="print-a4-page">
             <div className="print-ticket-slot" style={{ top: "8mm", left: "14mm" }}>
               <div style={{ width: 856 }}>
-                <TicketPreview ticket={ticket} exporting={true} showGate={showGate} idPrefix="single-print" />
+                <TicketPreview ticket={ticket} exporting={true} showGate={showGate} idPrefix="single-print" backRotated={backRotated} />
               </div>
             </div>
           </div>
@@ -553,7 +568,7 @@ export default function TicketPage() {
               {[0, 1, 2, 3].map((slot) => {
                 const ticketIdx = pageIdx * 4 + slot;
                 if (ticketIdx >= batchTickets.length) return null;
-                const bt = batchTickets[ticketIdx];
+                const item = batchTickets[ticketIdx];
                 // 固定四角定位：上排 top=8mm，下排 top=8+107.96+20=135.96mm
                 const POSITIONS: React.CSSProperties[] = [
                   { top: "8mm", left: "14mm" },
@@ -564,7 +579,7 @@ export default function TicketPage() {
                 return (
                   <div key={slot} className="print-ticket-slot" style={POSITIONS[slot]}>
                     <div style={{ width: 856 }}>
-                      <TicketPreview ticket={bt} exporting={true} showGate={showGate} idPrefix={`batch-print-${ticketIdx}`} />
+                      <TicketPreview ticket={item.ticket} exporting={true} showGate={showGate} idPrefix={`batch-print-${ticketIdx}`} backRotated={item.backRotated} />
                     </div>
                   </div>
                 );

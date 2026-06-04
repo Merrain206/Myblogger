@@ -55,6 +55,7 @@ export default function TicketPage() {
   const [parsing, setParsing] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const [showBetaNotice, setShowBetaNotice] = useState(true);
+  const [showGate, setShowGate] = useState(true);
   const [seatLetter, setSeatLetter] = useState("A");
   const ticketRef = useRef<HTMLDivElement>(null);
 
@@ -149,6 +150,7 @@ export default function TicketPage() {
   return (
     <>
       <style jsx global>{`
+        .input-sm { width: 103%; }
         @media print {
           @page {
             size: 85.6mm 53.98mm landscape;
@@ -232,6 +234,17 @@ export default function TicketPage() {
                 </button>
               </div>
 
+              {/* 检票口开关 */}
+              <div className="mb-4 flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">显示检票口</span>
+                <button
+                  onClick={() => setShowGate((v) => !v)}
+                  className={`relative h-5 w-9 rounded-full transition-colors ${showGate ? "bg-primary-500" : "bg-slate-300 dark:bg-slate-600"}`}
+                >
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${showGate ? "left-4 translate-x-0.5" : "left-0.5"}`} />
+                </button>
+              </div>
+
               <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-slate-100">车票信息</h2>
               <div className="space-y-3 max-h-[580px] overflow-y-auto pr-1">
 
@@ -287,12 +300,13 @@ export default function TicketPage() {
                       {isDaiyingzuo ? (
                         <div className="flex gap-1">
                           <input
-                            className="input-sm flex-1"
+                            className="input-sm"
+                            style={{ width: 80 }}
                             value={(() => { const s = ticket.seatNumber; return s && /[ABCD]$/.test(s) ? s.slice(0, -1) : s; })()}
                             onChange={(e) => update("seatNumber", e.target.value + seatLetter)}
                           />
                           <select
-                            className="input-sm w-[52px]"
+                            className="input-sm !w-[52px]"
                             value={seatLetter}
                             onChange={(e) => {
                               setSeatLetter(e.target.value);
@@ -308,7 +322,7 @@ export default function TicketPage() {
                           </select>
                         </div>
                       ) : (
-                        <input className="input-sm" value={ticket.seatNumber} onChange={(e) => update("seatNumber", e.target.value)} />
+                        <input className="input-sm" style={{ width: 80 }} value={ticket.seatNumber} onChange={(e) => update("seatNumber", e.target.value)} />
                       )}
                     </Field>
                     {isSleeper && (
@@ -349,15 +363,15 @@ export default function TicketPage() {
                     </Field>
                     <div className="col-span-2">
                       <Field label="电子客票号">
-                        <input className="input-sm" value={ticket.electronicTicketNo} onChange={(e) => update("electronicTicketNo", e.target.value)} placeholder="如 20750A6*********541562025" />
+                        <input className="input-sm" style={{ width: 280 }} value={ticket.electronicTicketNo} onChange={(e) => update("electronicTicketNo", e.target.value)} placeholder="如 20750A6*********541562025" />
                       </Field>
                     </div>
                     <Field label="发票号码">
-                      <input className="input-sm" value={ticket.invoiceNo} onChange={(e) => update("invoiceNo", e.target.value)} placeholder="如 26419**********19624" />
+                      <input className="input-sm" style={{ width: 280 }} value={ticket.invoiceNo} onChange={(e) => update("invoiceNo", e.target.value)} placeholder="如 26419**********19624" />
                     </Field>
                     <div className="col-span-2">
                       <Field label="开票日期">
-                        <input type="date" className="input-sm" value={ticket.issueDate} onChange={(e) => update("issueDate", e.target.value)} />
+                        <input type="date" style={{ width: 150 }} className="input-sm" value={ticket.issueDate} onChange={(e) => update("issueDate", e.target.value)} />
                       </Field>
                     </div>
                     <div className="col-span-2">
@@ -394,7 +408,7 @@ export default function TicketPage() {
                   {ticket.style === "blue" ? "报销凭证样式" : "纪念票样式"}
                 </span>
               </div>
-              <TicketPreview ticket={ticket} exporting={exporting} />
+              <TicketPreview ticket={ticket} exporting={exporting} showGate={showGate} />
             </div>
           </div>
         </div>

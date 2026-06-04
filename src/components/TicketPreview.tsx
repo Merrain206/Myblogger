@@ -89,11 +89,15 @@ export default function TicketPreview({
   ticket,
   exporting,
   showGate,
+  idPrefix,
 }: {
   ticket: TicketInfo;
   exporting: boolean;
   showGate: boolean;
+  idPrefix?: string;
 }) {
+  const faceId = idPrefix ? `${idPrefix}-face` : "ticket-face";
+  const backId = idPrefix ? `${idPrefix}-back` : "ticket-back";
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [qrSvg, setQrSvg] = useState("");
@@ -151,7 +155,7 @@ export default function TicketPreview({
         }}
       >
         <div
-          id="ticket-face"
+          id={faceId}
           className="ticket-face relative z-10 flex flex-col overflow-hidden rounded-[14px] border border-[#b8cfe0]"
           style={{
             width: BASE_WIDTH,
@@ -372,9 +376,9 @@ export default function TicketPreview({
 
                 {/* 虚线框提示语 */}
                 <div
-                  className="absolute z-10 left-[30px] right-[28px] p-[2px] text-center"
+                  className="absolute z-10 left-[25px] right-[25px] p-[2px] text-center"
                   style={{
-                    bottom: 10.5,
+                    bottom: 9,
                     fontSize: 24,
                     border: "2px dashed #291e1e",
                     borderRadius: 4,
@@ -426,7 +430,7 @@ export default function TicketPreview({
         {/* 背面 */}
         {isBlue ? (
           <div
-            id="ticket-back"
+            id={backId}
             className="ticket-back"
             style={{
               width: BASE_WIDTH,
@@ -454,7 +458,7 @@ export default function TicketPreview({
           </div>
         ) : (
           <div
-            id="ticket-back"
+            id={backId}
             className="ticket-back"
             style={{
               width: BASE_WIDTH,

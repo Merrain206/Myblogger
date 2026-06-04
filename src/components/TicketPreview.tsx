@@ -88,9 +88,11 @@ function parseDateTime(dateTime: string) {
 export default function TicketPreview({
   ticket,
   exporting,
+  showGate,
 }: {
   ticket: TicketInfo;
   exporting: boolean;
+  showGate: boolean;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -131,6 +133,10 @@ export default function TicketPreview({
 
   const showHeader = isBlue;
 
+  const isDaiyingzuo = ticket.seatType === "硬卧代硬座";
+  const seatLetter = isDaiyingzuo && /[ABCD]$/.test(ticket.seatNumber) ? ticket.seatNumber.slice(-1) : "";
+  const seatNum = isDaiyingzuo && seatLetter ? ticket.seatNumber.slice(0, -1) : ticket.seatNumber;
+
   return (
     <div
       ref={wrapperRef}
@@ -149,7 +155,7 @@ export default function TicketPreview({
           id="ticket-face"
           className="ticket-face relative z-10 flex h-full w-full flex-col overflow-hidden rounded-[14px] border border-[#b8cfe0]"
           style={{
-            padding: isBlue ? "5px 60px 0 50px" : "50px 60px 0 60px",
+            padding: isBlue ? "5px 60px 0 50px" : "20px 60px 0 60px",
             fontFamily: "'SimSun','宋体','PingFang SC','Microsoft YaHei',serif",
             fontWeight: 600,
             color: "#291e1e",
@@ -178,19 +184,17 @@ export default function TicketPreview({
             }}
           />
 
-          {/* ======== 顶部：票号 / 检票口 (仅蓝色) ======== */}
-          {showHeader && (
-            <div
-              className="relative z-10 flex items-center justify-between"
-              style={{ fontSize: 36, letterSpacing: 1 }}
-            >
-              <div className="font-semibold text-[#e35757]">{displaySerial}</div>
-              <div>检票：{ticket.gate}</div>
-            </div>
-          )}
+          {/* ======== 顶部：票号 / 检票口 ======== */}
+          <div
+            className="relative z-10 flex items-center justify-between"
+            style={{ fontSize: 36, letterSpacing: 1 }}
+          >
+            <div className="font-semibold text-[#e35757]">{displaySerial}</div>
+            {showGate && <div>检票：{ticket.gate}</div>}
+          </div>
 
           {/* ======== 主体内容区 ======== */}
-          <div className="relative z-10 flex-1">
+          <div className="relative z-20 flex-1" style={{ isolation: "isolate" }}>
             {/* 第一行：发站 / 车次+箭头 / 到站 */}
             <div
               className="grid items-center px-[20px]"
@@ -294,13 +298,14 @@ export default function TicketPreview({
                   <span style={{ fontSize: 24 }}>开</span>
                 </span>
               </div>
-              <div>
+              <div style={["软卧", "硬卧", "动卧", "高级软卧", "一等卧", "二等卧"].includes(ticket.seatType) ? { display: "inline-block", transform: "translateX(35px)" } : undefined}>
                 {ticket.carriage}
                 <span style={{ fontSize: 24 }}>车</span>
-                {ticket.seatNumber}
+                {seatNum}
                 {ticket.seatNumber !== "无座" && (
                   <span style={{ fontSize: 24 }}>号</span>
                 )}
+                {seatLetter}
                 {ticket.berthType && (
                   <>
                     {ticket.berthType}
@@ -331,7 +336,7 @@ export default function TicketPreview({
                 ))}
               </div>
               <div className="flex items-center" style={{ gap: 12 }}>
-                <span style={ticket.seatType === "新空调硬座" || ticket.seatType === "硬卧代硬座" ? { display: "inline-block", transform: "translateX(60px)" } : undefined}>
+                <span style={ticket.seatType === "新空调硬座" || ticket.seatType === "硬卧代硬座" ? { display: "inline-block", transform: "translateX(60px)" } : ticket.seatType === "高级软卧" ? { display: "inline-block", transform: "translateX(40px)" } : undefined}>
                   {ticket.seatNumber === "无座" ? "二等座" : ticket.seatType}
                 </span>
               </div>
@@ -351,17 +356,17 @@ export default function TicketPreview({
                 gap: 16,
               }}
             >
-              <div>
+              <div className="relative z-10">
                 <div style={{ fontSize: 35 }}>
                   {ticket.idNumber} {ticket.passengerName}
                 </div>
 
                 {/* 虚线框提示语 */}
                 <div
-                  className="mx-[28px] p-[2px] text-center"
+                  className="absolute z-10 left-[30px] right-[28px] p-[2px] text-center"
                   style={{
+                    bottom: 11.5,
                     fontSize: 24,
-                    marginTop: -6,
                     border: "2px dashed #291e1e",
                     borderRadius: 4,
                   }}
@@ -381,10 +386,10 @@ export default function TicketPreview({
 
                 {!showHeader && (
                   <div
-                    className="absolute bottom-0 z-10 flex h-[0px] items-center"
-                    style={{ width: 856, paddingLeft: 0, fontSize: 30 }}
+                    className="absolute z-10 flex items-center"
+                    style={{ bottom: -40, width: 856, paddingLeft: 0, fontSize: 30 }}
                   >
-                    {displayFooterInfo}  JM
+                    {displayFooterInfo}  {ticket.fromStation}售
                   </div>
                 )}
               </div>

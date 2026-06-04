@@ -141,20 +141,21 @@ export default function TicketPreview({
     <div
       ref={wrapperRef}
       className="w-full"
-      style={{ aspectRatio: `${BASE_WIDTH}/${BASE_HEIGHT}` }}
+      style={{ aspectRatio: `${BASE_WIDTH}/${BASE_HEIGHT * 2}` }}
     >
       <div
-        className="relative origin-top-left"
+        className="flex flex-col origin-top-left"
         style={{
           width: BASE_WIDTH,
-          height: BASE_HEIGHT,
           transform: exporting ? "none" : `scale(${scale})`,
         }}
       >
         <div
           id="ticket-face"
-          className="ticket-face relative z-10 flex h-full w-full flex-col overflow-hidden rounded-[14px] border border-[#b8cfe0]"
+          className="ticket-face relative z-10 flex flex-col overflow-hidden rounded-[14px] border border-[#b8cfe0]"
           style={{
+            width: BASE_WIDTH,
+            height: BASE_HEIGHT,
             padding: isBlue ? "5px 60px 0 50px" : "20px 60px 0 60px",
             fontFamily: "'SimSun','宋体','PingFang SC','Microsoft YaHei',serif",
             fontWeight: 600,
@@ -373,7 +374,7 @@ export default function TicketPreview({
                 <div
                   className="absolute z-10 left-[30px] right-[28px] p-[2px] text-center"
                   style={{
-                    bottom: 11.5,
+                    bottom: 10.5,
                     fontSize: 24,
                     border: "2px dashed #291e1e",
                     borderRadius: 4,
@@ -421,20 +422,64 @@ export default function TicketPreview({
             </div>
           )}
         </div>
-      </div>
 
-      {/* 背面（屏幕隐藏，打印时显示） */}
-      <div
-        id="ticket-back"
-        className="ticket-back hidden"
-        style={{
-          width: BASE_WIDTH,
-          height: BASE_HEIGHT,
-          borderRadius: 14,
-          border: "1px solid #b8cfe0",
-          backgroundColor: "white",
-        }}
-      />
+        {/* 背面 */}
+        {isBlue ? (
+          <div
+            id="ticket-back"
+            className="ticket-back"
+            style={{
+              width: BASE_WIDTH,
+              height: BASE_HEIGHT,
+              borderRadius: 14,
+              border: "1px solid #b8cfe0",
+              backgroundColor: "#0a0a0b",
+              color: "#6f8896",
+              fontFamily: "'SimSun','宋体','PingFang SC','Microsoft YaHei',serif",
+              padding: "28px 46px",
+              fontSize: 23,
+              lineHeight: 1.55,
+              overflow: "hidden",
+            }}
+          >
+            <h2 style={{ textAlign: "center", fontSize: 35, fontWeight: 600, margin: "0 0 12px 0", fontFamily: "'SimHei','黑体','PingFang SC',sans-serif" }}>
+              报销凭证使用须知
+            </h2>
+            <p style={{ textIndent: "2em", margin: 0 }}>☆购票后如需报销凭证的，应在开车前或乘车日期之日起180日以内(含当日)，持购票时所使用的有效身份证件原件到车站售票窗口、自动售票机领取。</p>
+            <p style={{ textIndent: "2em", margin: 0 }}>☆退票后如需退票费报销凭证，应在办理之日起180天以内(含当日)，持购票时所使用的有效身份证件原件到车站退票窗口领取。</p>
+            <p style={{ textIndent: "2em", margin: 0 }}>☆报销凭证开具后请妥善保管，丢失后将无法办理补办申领手续。</p>
+            <p style={{ textIndent: "2em", margin: 0 }}>☆已领取报销凭证的车票办理改签、退票或退款手续时，须交回报销凭证方可办理。</p>
+            <p style={{ textIndent: "2em", margin: 0 }}>☆报销凭证不能作为乘车凭证使用。</p>
+            <p style={{ textIndent: "2em", margin: 0 }}>☆未尽事宜见《国铁集团铁路旅客运输规程》等有关规定和车站公告。跨境旅客事宜见铁路跨境旅客相关运输组织规则和车站公告。</p>
+          </div>
+        ) : (
+          <div
+            id="ticket-back"
+            className="ticket-back"
+            style={{
+              width: BASE_WIDTH,
+              height: BASE_HEIGHT,
+              borderRadius: 14,
+              border: "1px solid #b8cfe0",
+              backgroundColor: "#ffffff",
+              color: "#080808",
+              fontFamily: "'SimSun','宋体','PingFang SC','Microsoft YaHei',serif",
+              padding: "40px 78px",
+              fontSize: 19.5,
+              lineHeight: 1.45,
+              overflow: "visible",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <p style={{ textIndent: "3em", margin: 0, flex: 1 }}>
+              <span style={{ fontSize: 27, fontWeight: 600, fontFamily: "'SimHei','黑体','PingFang SC',sans-serif" }}>乘车须知：</span>
+              ☆请妥善保管车票。☆请凭车票和本人有效身份证件原件乘车，如改签、变更到站或退票请提前办理。票、证、人不一致的，铁路部门有权拒绝进站乘车。直达票中途下车，未乘区间失效，通票中转需签证。☆免费携带品上限为成人20千克、儿童10千克、长宽高之和160厘米（动车组130厘米），超过上限请办理托运。不得携带可能威胁公共安全的禁止或限制运输物品、造成人身伤害的大件硬质物品、妨碍公共卫生及损坏污染车辆的物品。☆开车前提前停止检票，请提前到车站指定场所候车。☆对无票乘车、冒用身份信息购票及多次挂失车票有一票两用的，铁路部门保留限制购票等权利。☆遇运行图调整导致已购车票列车运行时刻变动的，铁路部门免费提供改签、变更到站及退票服务。☆遇灾害险情等特殊情况，须听从铁路工作人员指挥安排。☆12306.cn（含铁路12306手机客户端）是唯一官方网站，请勿通过其他网站技术手段抢票，以免遭受损失。☆未尽事宜详见《铁路旅客运输规程》等有关规定和车站公告。跨境旅客事宜详见铁路跨境旅客相关运输组织规则和车站公告。
+            </p>
+            <div style={{ height: 30, backgroundColor: "#080808", marginTop: 8, marginLeft: -78, marginRight: -78, flexShrink: 0 }} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

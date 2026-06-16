@@ -42,8 +42,6 @@ npm run lint       # ESLint 检查
 | react-markdown | AI 解卦结果 Markdown 渲染 |
 | date-fns | 日期格式化 |
 | lunar-typescript | 农历/干支/节气计算（周易工具） |
-| html2canvas | 车票 DOM 截图（历史依赖，当前打印方案未使用） |
-| jspdf | 车票 PDF 生成（历史依赖，当前打印方案未使用） |
 | qrcode | 车票二维码生成 |
 
 ## 架构
@@ -106,66 +104,23 @@ src/content/posts/*.mdx  →  fs.readFileSync  →  gray-matter 解析
 
 ### 路径别名
 
-`@/*` → `./src/*` (在 `tsconfig.json` 中配置)
+`@/*` → `./src/*`，暗色模式 `darkMode: "class"`（`layout.tsx` 内联脚本 + `Navbar.tsx` toggle + `localStorage`）。
 
-### 暗色模式
+### MDX 配置与编写规则
 
-- Tailwind `darkMode: "class"`，通过 `layout.tsx` 中的内联脚本在页面加载前初始化
-- `Navbar.tsx` 中的按钮切换 `dark` class 并写入 `localStorage`
+`next.config.ts` 配置 `remark-gfm` + `rehype-pretty-code`(github-dark)，`.mdx` 文件即页面路由。文章用 `next-mdx-remote/rsc`（`page.tsx:129`）渲染，`@mdx-js/mdx` 编译为 JSX → RSC 渲染。
 
-### MDX 配置
-
-`next.config.ts` 中通过 `@next/mdx` 配置了 `remark-gfm` 和 `rehype-pretty-code`（主题 `github-dark`），`.mdx` 文件可直接作为页面路由。
-
-文章实际渲染使用 `next-mdx-remote/rsc`（`src/app/blog/[slug]/page.tsx:129`），搭配 `MDXComponents` 自定义组件。MDX 源文件经 `@mdx-js/mdx` 编译为 JSX，再由 React Server Components 渲染。
-
-### MDX 内容编写关键规则
-
-#### HTML 注释禁令
-
-**MDX 不支持 HTML 注释 `<!-- ... -->`！** 这是最常见的 MDX 坑之一。
-
-- ❌ `<!-- 这是一段注释 -->` — MDX 解析器看到 `!` 字符后报错：`Unexpected character ! (U+0021) before name`
-- ✅ `{/* 这是一段注释 */}` — 使用 JSX 风格注释
-- 受影响场景：内联 SVG 图表中的注释、HTML 模板粘贴到 MDX 时带注释
-
-**实际踩坑**：在 MDX 中嵌入 SVG 图表时，SVG 内部的 `<!-- 背景 -->`、`<!-- X 轴 -->` 等注释导致页面返回 500。`npm run build` 虽然成功（SSG 降级为动态渲染），但实际访问时 MDX 编译抛异常。解决方法：去掉 SVG 中所有 HTML 注释行。
-
-#### 图表方案（重要更新 2026-06-16）
-
-> **内联 SVG 在 MDX 中已被弃用，改用 PNG + `![]()` 引用。**
-
-内联 SVG 的两大坑：
-1. HTML 注释 `<!-- -->` → 触发 `Unexpected character !` 错误
-2. CSS 花括号 `{ }` → 触发 `Could not parse expression with acorn` 错误（即使 `` {`...`} `` 包裹也治标不治本）
-
-**当前方案：Python matplotlib → PNG → `![]()` 引用**
-- 生成脚本：`scripts/generate_blog_charts.py`
-- 图片目录：`public/images/blog/*.png`
-- MDX 引用：`![alt text](/images/blog/xxx.png)`（标准 Markdown，不经 MDX 编译器）
-- 优点：零 MDX 解析风险，构建永远成功
-- 缺点：白底图片在暗色模式下无自动切换（可接受）
+- ❌ `<!-- HTML 注释 -->` → MDX 报 `Unexpected character !`（用 `{/* JSX 注释 */}` 替代）
+- ❌ 内联 SVG：`<style>` 中 CSS 花括号 `{ }` 触发 `Could not parse expression with acorn`
+- ✅ **图表方案**：Python matplotlib 生成 PNG → `![alt](/images/blog/xxx.png)` 引用
+  - 生成脚本 `scripts/generate_blog_charts.py`，图片输出 `public/images/blog/`
+  - Markdown 图片不经 MDX 编译器，零解析风险
 
 ### 部署后验证规则
 
 **`npm run build` 成功 ≠ 所有页面正常渲染。** SSG 页面的 MDX 编译错误可能不阻塞构建，但会导致具体路由返回 500。
 
-每次部署后必须验证：
-
-```bash
-# 1. 先验证服务器本地（绕过 Cloudflare 缓存）
-ssh -i claude_private.pem ubuntu@{{SERVER_IP}} \
-  "curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/blog/<slug>"
-
-# 2. 检查实际渲染内容是否包含预期元素
-ssh -i claude_private.pem ubuntu@{{SERVER_IP}} \
-  "curl -s http://localhost:3000/blog/<slug> | grep -c '<svg'"
-
-# 3. 服务器本地确认无误后，再验证 CDN 侧
-curl -s -o /dev/null -w "%{http_code}" "https://merrain.cn/blog/<slug>"
-```
-
-**排查顺序**：服务器本地 3000 → CDN 外网。若服务器本地正常但外网异常 → Cloudflare 缓存问题；若服务器本地也异常 → 代码/构建问题。
+每次部署后必须验证：先服务器本地 `curl http://localhost:3000/blog/<slug>`（绕过 CDN），确认 200 且内容正确，再验证公网 `curl https://merrain.cn/blog/<slug>`。排查顺序：3000 → CDN，本地异常=代码问题，外网异常=缓存问题。
 
 ## 五子棋在线对战
 
@@ -203,12 +158,7 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 - `src/app/api/tools/yijing/auth/route.ts` — 密码验证 API，返回 HMAC 签名 token（24h 有效）
 - `src/app/api/tools/yijing/interpret/route.ts` — AI 解卦 API，多方交叉验证
 - `src/app/api/tools/yijing/archives/route.ts` — 存档 API，服务端 JSON 文件持久化（GET/POST/DELETE）
-- `src/lib/yijing/paipan.ts` — 排盘主入口：四柱、卦象匹配、变卦、六亲、神煞
-- `src/lib/yijing/calendar.ts` — 农历/真太阳时（基于 `lunar-typescript`）
-- `src/lib/yijing/shensha-calc.ts` — 神煞推算（天乙贵人/文昌/禄神/驿马/桃花/华盖/亡神）
-- `src/lib/yijing/liuqin.ts` — 六亲配卦（宫五行 vs 爻五行生克）
-- `src/lib/yijing/data/bagua.ts` — 六十四卦完整数据（卦辞/爻辞/纳甲五行）
-- `src/lib/yijing/data/regions.ts` — ~280 个中国城市经纬度
+- `src/lib/yijing/` — paipan.ts(排盘主入口) / calendar.ts(农历真太阳时) / shensha-calc.ts(神煞) / liuqin.ts(六亲配卦) / data/(64卦数据+城市经纬度)
 - `src/components/yijing/` — YaoSelector / PaipanDisplay / AIInterpret / ArchivePanel 组件（存档用 localStorage + 服务端双向同步，自定义事件通信）
 
 ### 解卦流程
@@ -257,15 +207,10 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 
 ### 技术要点
 
-- **物理规格**：85.6mm × 53.98mm（PDF 和直接打印统一），正反面相同尺寸
-- **背面**：PDF 第二页 + 打印 @page 第二页，屏幕隐藏，预留后期添加内容
-- **背景渲染**：使用 `<img>` 标签而非 CSS `background-image`，渲染更可靠
-- **字体设置**：站名用 SimHei/黑体，正文用 SimSun/宋体，车次用 Mongolian Baiti
-- **扫描件效果**：条纹底纹用 CSS repeating-linear-gradient 模拟
-- **二维码**：qrcode 库生成 SVG，`color.light: "#00000000"` 透明底色
-- **无座处理**：seatNumber 为"无座"时不追加"号"字，seatType 强制显示为"二等座"
-- **特殊席别**："新空调硬座"和"硬卧代硬座"字体右移 20px
-- **AI 解析增强**：识别"02车无座"连写格式、复合席别"新空调硬座"和"硬卧代硬座"
+- **物理规格**：85.6mm × 53.98mm，正反面相同；背景用 `<img>` 标签，条纹底纹用 CSS `repeating-linear-gradient`
+- **字体**：站名 SimHei/黑体，正文 SimSun/宋体，车次 Mongolian Baiti；特殊席别字体右移 20px
+- **无座处理**：seatNumber 为"无座"不追加"号"字，seatType 强制"二等座"
+- **AI 解析**：识别"02车无座"连写、复合席别"新空调硬座""硬卧代硬座"；二维码 qrcode 库 SVG 透明底色
 
 ## 服务器部署
 
@@ -273,18 +218,11 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 
 | 项目 | 值 |
 |------|-----|
-| 域名 | **merrain.cn** / **www.merrain.cn** |
-| IP | {{SERVER_IP}} |
-| 系统 | Ubuntu 22.04 LTS |
-| 配置 | 2核2G 4M带宽 50GB SSD |
-| SSH 用户 | ubuntu |
-| SSH 密钥 | `claude_private.pem` (RSA 2048) |
-| SSH 连接 | `ssh -i claude_private.pem ubuntu@{{SERVER_IP}}` |
-| 项目路径 | `/home/ubuntu/myblogger` |
-| Web 服务 | Nginx (80/443) → Next.js (3000)，HTTP 自动跳转 HTTPS |
-| SSL 证书 | Let's Encrypt，自动续期，certbot 管理 |
-| 进程管理 | PM2 |
-| DNS 托管 | 腾讯云 DNSPod |
+| 域名 | **merrain.cn** / **www.merrain.cn**，IP {{SERVER_IP}} |
+| 系统 | Ubuntu 22.04，2核2G 4Mbps 50GB SSD |
+| SSH | `ssh -i claude_private.pem ubuntu@{{SERVER_IP}}` |
+| 路径 | `/home/ubuntu/myblogger` |
+| Web | Nginx(80/443)→Next.js(3000)，Let's Encrypt SSL，PM2 进程管理 |
 
 ### PM2 进程
 

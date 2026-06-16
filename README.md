@@ -56,14 +56,13 @@
 | gray-matter | Frontmatter 解析 |
 | Fuse.js | 客户端全文搜索 |
 | rehype-pretty-code + Shiki | 代码高亮 |
-| remark-gfm | GitHub 风格 Markdown |
+| remark-gfm + remark-math | GitHub 风格 Markdown + 数学公式 |
+| rehype-katex | KaTeX 数学公式渲染 |
 | react-markdown | AI 解卦 Markdown 渲染 |
 | date-fns | 日期格式化 |
 | ws | WebSocket 服务器（五子棋在线对战） |
 | lunar-typescript | 农历/干支/节气（周易排盘） |
 | @giscus/react | 博客评论区 |
-| html2canvas | 车票 DOM 截图导出 |
-| jspdf | 车票 PDF 生成 |
 | qrcode | 车票二维码生成 |
 
 ## 快速开始

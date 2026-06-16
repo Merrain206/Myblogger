@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. **同步到云服务器需用户确认**：**禁止**在用户未明确指令的情况下自动通过 SCP 同步文件到云服务器。只有在用户明确要求"同步到服务器"、"部署"等指令后才可执行 SCP 同步、服务器构建和 PM2 重启操作。
 2. **Git 推送需用户确认**：**禁止**主动执行 `git push`，该命令只能由用户本人明确发出后才可执行。`git add` 和 `git commit` 也不主动执行，除非用户要求。
 3. **敏感信息脱敏**：**禁止**在代码、文档、配置文件中硬编码服务器 IP、SSH 私钥、API 密钥、数据库密码等敏感信息。所有敏感值统一使用 `{{占位符}}` 替代，真实值通过环境变量或外部安全存储注入。
+4. **标签数量限制**：所有文章的标签（去重后唯一值）总数不超过 **15 个**。新增文章时优先复用已有标签，每个文章 1~3 个标签，保持粒度一致（领域级而非关键词级）。若现有标签无法覆盖，才考虑新增。
 
 ## 项目概述
 
@@ -76,7 +77,7 @@ src/
 │   ├── yijing/                  # 周易工具组件 (爻选择器/排盘/AI解卦)
 │   └── vocabulary/             # 词汇工具专属组件
 ├── content/
-│   ├── posts/                  # .mdx 文章文件 (6 篇)
+│   ├── posts/                  # .mdx 文章文件 (9 篇)
 │   └── projects.ts            # 项目数据 (静态数组)
 ├── lib/
 │   ├── auth/route-auth.ts      # 共享 HMAC auth (signToken/verifyToken)
@@ -188,7 +189,7 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 - **443 端口**：为页面路径加 `proxy_hide_header Cache-Control` + `add_header Cache-Control "no-cache"`，否则 Next.js 的 `s-maxage=31536000` 会让 Cloudflare 缓存 HTML 一年
 - **80 端口**：Cloudflare Tunnel 实际走 80 端口，需要加对应的 `location` 块（`/_next/static` 和工具页面路径），否则会被 `return 301` 重定向形成死循环
 
-当前 Nginx 特殊处理路径：`/tools/hermes`、`/_next/static`（两端口均已配置）。`/tools/ticket` 尚未添加 Nginx 缓存剥离，部署后需补充。
+当前 Nginx 特殊处理路径：`/projects`、`/blog`、`/tools`（含所有子路径如 `/tools/ticket`、`/tools/hermes` 等）均已配置缓存剥离。静态资源 `/hermes/` 和 `/_next/static` 走独立 location 块，无需剥离。
 
 ## 车票生成器
 

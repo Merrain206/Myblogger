@@ -117,6 +117,56 @@ src/content/posts/*.mdx  →  fs.readFileSync  →  gray-matter 解析
 
 `next.config.ts` 中通过 `@next/mdx` 配置了 `remark-gfm` 和 `rehype-pretty-code`（主题 `github-dark`），`.mdx` 文件可直接作为页面路由。
 
+文章实际渲染使用 `next-mdx-remote/rsc`（`src/app/blog/[slug]/page.tsx:129`），搭配 `MDXComponents` 自定义组件。MDX 源文件经 `@mdx-js/mdx` 编译为 JSX，再由 React Server Components 渲染。
+
+### MDX 内容编写关键规则
+
+#### HTML 注释禁令
+
+**MDX 不支持 HTML 注释 `<!-- ... -->`！** 这是最常见的 MDX 坑之一。
+
+- ❌ `<!-- 这是一段注释 -->` — MDX 解析器看到 `!` 字符后报错：`Unexpected character ! (U+0021) before name`
+- ✅ `{/* 这是一段注释 */}` — 使用 JSX 风格注释
+- 受影响场景：内联 SVG 图表中的注释、HTML 模板粘贴到 MDX 时带注释
+
+**实际踩坑**：在 MDX 中嵌入 SVG 图表时，SVG 内部的 `<!-- 背景 -->`、`<!-- X 轴 -->` 等注释导致页面返回 500。`npm run build` 虽然成功（SSG 降级为动态渲染），但实际访问时 MDX 编译抛异常。解决方法：去掉 SVG 中所有 HTML 注释行。
+
+#### 图表方案（重要更新 2026-06-16）
+
+> **内联 SVG 在 MDX 中已被弃用，改用 PNG + `![]()` 引用。**
+
+内联 SVG 的两大坑：
+1. HTML 注释 `<!-- -->` → 触发 `Unexpected character !` 错误
+2. CSS 花括号 `{ }` → 触发 `Could not parse expression with acorn` 错误（即使 `` {`...`} `` 包裹也治标不治本）
+
+**当前方案：Python matplotlib → PNG → `![]()` 引用**
+- 生成脚本：`scripts/generate_blog_charts.py`
+- 图片目录：`public/images/blog/*.png`
+- MDX 引用：`![alt text](/images/blog/xxx.png)`（标准 Markdown，不经 MDX 编译器）
+- 优点：零 MDX 解析风险，构建永远成功
+- 缺点：白底图片在暗色模式下无自动切换（可接受）
+
+### 部署后验证规则
+
+**`npm run build` 成功 ≠ 所有页面正常渲染。** SSG 页面的 MDX 编译错误可能不阻塞构建，但会导致具体路由返回 500。
+
+每次部署后必须验证：
+
+```bash
+# 1. 先验证服务器本地（绕过 Cloudflare 缓存）
+ssh -i claude_private.pem ubuntu@{{SERVER_IP}} \
+  "curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/blog/<slug>"
+
+# 2. 检查实际渲染内容是否包含预期元素
+ssh -i claude_private.pem ubuntu@{{SERVER_IP}} \
+  "curl -s http://localhost:3000/blog/<slug> | grep -c '<svg'"
+
+# 3. 服务器本地确认无误后，再验证 CDN 侧
+curl -s -o /dev/null -w "%{http_code}" "https://merrain.cn/blog/<slug>"
+```
+
+**排查顺序**：服务器本地 3000 → CDN 外网。若服务器本地正常但外网异常 → Cloudflare 缓存问题；若服务器本地也异常 → 代码/构建问题。
+
 ## 五子棋在线对战
 
 ### 架构

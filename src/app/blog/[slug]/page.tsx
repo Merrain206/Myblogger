@@ -9,7 +9,9 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import rehypePrettyCode from "rehype-pretty-code";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -129,8 +131,11 @@ export default async function PostPage({ params }: PageProps) {
               components={MDXComponents}
               options={{
                 mdxOptions: {
-                  remarkPlugins: [remarkGfm],
-                  rehypePlugins: [[rehypePrettyCode, { theme: "github-dark", keepBackground: false }]],
+                  remarkPlugins: [remarkGfm, remarkMath],
+                  rehypePlugins: [
+                    rehypeKatex,
+                    [rehypePrettyCode, { theme: "github-dark", keepBackground: false }],
+                  ],
                 },
               }}
             />

@@ -126,3 +126,23 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-400 dark:bg-slate-500;
 }
+
+/* ===== KaTeX 暗色模式适配 ===== */
+.dark .katex {
+  color: #e2e8f0; /* slate-200 */
+}
+
+.dark .katex .mord,
+.dark .katex .mathrm,
+.dark .katex .mathit,
+.dark .katex .mathbf,
+.dark .katex .mathsf,
+.dark .katex .mathtt,
+.dark .katex .mathnormal {
+  color: #e2e8f0;
+}
+
+.dark .katex .mbin,
+.dark .katex .mrel {
+  color: #38bdf8; /* primary-400 */
+}

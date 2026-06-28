@@ -1,0 +1,739 @@
+---
+title: "Pandas 与 NumPy 数据清洗实用指南"
+date: "2026-06-28"
+category: "数据科学"
+tags: ["Python", "数据分析"]
+summary: "掌握 Pandas 与 NumPy 进行数据清洗的完整方法论——从缺失值处理、类型转换、异常值检测到字符串清洗，覆盖 7 种填充策略、Z-Score 与 IQR 异常值检测，以及一套可直接复用的清洗流水线代码。"
+---
+
+## 引言：数据清洗为什么是你的"第一课"？
+
+如果你做过任何形式的数据分析工作，你一定听过这句话：**"80% 的时间花在数据清洗上，只有 20% 的时间在做真正的分析。"** 这不是段子，是过来人的血泪总结。
+
+现实世界的数据很少是"开箱即用"的。你从数据库导出的 CSV 可能有乱码和空行，从 API 拉回来的 JSON 字段类型飘忽不定，用户填的表单里手机号混着座机号和备注文字……这些问题不会因为你换了一个更贵的显卡或者更复杂的模型就自动消失。
+
+就像一个建筑工地上，**地基没平整好，上面盖什么都会歪**。数据清洗就是你数据分析工作里的"平地"——不性感，但无可跳步。
+
+### 为什么是 Pandas + NumPy？
+
+Python 生态里做数据清洗的工具并不少，但 Pandas 和 NumPy 的组合几乎是事实标准：
+
+| 库 | 核心能力 | 在清洗中的角色 |
+|---|---------|-------------|
+| **NumPy** | 高性能多维数组运算 | 数值计算引擎：均值、标准差、分位数、向量化条件筛选 |
+| **Pandas** | 表格化数据处理（DataFrame） | 清洗主框架：读写文件、缺失值、类型转换、字符串处理、去重 |
+
+简单来说：**Pandas 负责"管理数据"，NumPy 负责"计算数据"。** Pandas 的底层本来就是 NumPy，两者天然无缝配合。本文会用实际代码演示这套组合拳怎么打。
+
+在开始之前，先装好依赖：
+
+```python
+pip install pandas numpy matplotlib seaborn
+```
+
+---
+
+## 数据导入与全局概览：先"相面"，再动手
+
+拿到一份新数据时，最常见的错误就是**一上来就开始改**。你不知道数据里有什么问题，改什么？
+
+正确姿势是先用几行代码建立整体印象。我把它叫做"数据相面三件套"。
+
+### 读取文件的几个关键参数
+
+```python
+import pandas as pd
+import numpy as np
+
+# 一个真实场景：文件编码不是 utf-8，分隔符不是逗号，还有抬头行要跳过
+df = pd.read_csv(
+    "sales_data.csv",
+    encoding="gbk",          # 中文 Windows 导出的文件常见 GBK 编码
+    sep=";",                 # 有些欧洲系统用分号做分隔符
+    skiprows=3,              # 跳过前三行说明文字
+    na_values=["N/A", ""],   # 把特定值直接识别为缺失值
+)
+```
+
+`na_values` 这个参数特别实用——很多系统导出的空值用的是 `"N/A"` 或空字符串，但 Pandas 默认不认这些。提前声明，后面省事很多。
+
+大文件怎么办？用 `chunksize` 分块读，边读边洗：
+
+```python
+# 一个 5GB 的日志文件，内存只有 2GB
+chunks = []
+for chunk in pd.read_csv("huge_log.csv", chunksize=100000):
+    chunk = chunk.dropna(subset=["user_id"])  # 每块先洗再存
+    chunks.append(chunk)
+df = pd.concat(chunks, ignore_index=True)
+```
+
+### "数据相面三件套"
+
+```python
+# 第一件：看看各列的数据类型，以及有多少缺失值
+df.info()
+# 输出示例：
+# <class 'pandas.core.frame.DataFrame'>
+# RangeIndex: 10000 entries, 0 to 9999
+# Data columns (total 8 columns):
+#  #   Column       Non-Null Count  Dtype
+# ---  ------       --------------  -----
+#  0   order_id     10000 non-null  object
+#  1   customer     9850 non-null   object   ← 有 150 个缺失
+#  2   amount       10000 non-null  object   ← 金额竟然是 object！得转数字
+#  3   order_time   9870 non-null   object   ← 日期也是 object
+#  4   city         10000 non-null  object
+#  5   phone        8200 non-null   object   ← 缺失不少
+#  6   status       10000 non-null  object
+#  7   notes        3200 non-null   object   ← 缺失严重
+
+# 第二件：看看数值列的分布情况
+df.describe()
+# count, mean, std, min, 25%, 50%, 75%, max
+# 如果 amount 的 min 是 -500，你就知道有退款或脏数据
+
+# 第三件：随机抽查几行
+df.sample(10)
+# 肉眼扫一遍，经常能发现统计数字不会告诉你的事
+# ——比如 phone 列里有人填了"无"
+```
+
+这三行代码跑完，你应该能回答：**哪几列有缺失、严重程度如何、数据类型对不对、有没有一眼就能看出的脏数据。** 带着这些信息，再进入下一步。
+
+---
+
+## 缺失值处理：空白的艺术
+
+缺失值是数据清洗中**最高频**的问题。但很多人处理它的方式是全删——这可能是最偷懒也最危险的做法。
+
+### 定位缺失值
+
+```python
+# 每列缺失数量
+df.isna().sum()
+
+# 缺失比例（百分比）
+(df.isna().sum() / len(df) * 100).sort_values(ascending=False)
+
+# 可视化——一眼看出缺失分布
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 4))
+sns.heatmap(df.isna(), cbar=False, cmap="viridis", yticklabels=False)
+plt.title("缺失值分布热力图（黄色 = 缺失）")
+plt.show()
+```
+
+热力图的价值在于发现**缺失是否存在关联性**。比如你可能会看到某两列总是同时缺失——这意味着它们很可能来自同一数据源，其中一个系统出了问题。
+
+### 删除 vs 填充：决策框架
+
+没有一刀切的规则，但可以建立一个实用的思考框架：
+
+| 缺失比例 | 缺失的是关键列？ | 建议 |
+|---------|---------------|------|
+| > 50% | 无关紧要 | **删列**。信息太少，保留也无意义 |
+| > 50% | 关键列 | **保留**但标记来源不可靠，尝试从其他列推断 |
+| 5%~50% | 均可 | **填充**。优先用业务逻辑推断，退而求均值/中位数 |
+| < 5% | 均可 | **删行**。去掉这几行对整体影响微乎其微 |
+
+```python
+# 删缺失比例 > 50% 的列
+threshold = len(df) * 0.5
+df = df.dropna(axis=1, thresh=threshold)
+
+# 删缺失比例 < 5% 的行（只针对特定关键列）
+df = df.dropna(subset=["customer", "order_time"])
+
+# 删全列都为空的行（极少见但值得查）
+df = df.dropna(how="all")
+```
+
+### 七种填充策略
+
+删除只是第一步，填充才是真正的技术活。以下是 Pandas 支持的七种常用策略及它们的适用场景：
+
+**1. 固定值填充**——最直接，适合有明确默认值的场景
+
+```python
+df["status"] = df["status"].fillna("未知")
+df["score"] = df["score"].fillna(0)
+```
+
+**2. 均值填充**——适用于近似正态分布的数值列
+
+```python
+df["age"] = df["age"].fillna(df["age"].mean())
+```
+
+**3. 中位数填充**——有极端值存在时比均值更稳健
+
+```python
+df["income"] = df["income"].fillna(df["income"].median())
+```
+
+**4. 众数填充**——适合分类变量
+
+```python
+df["city"] = df["city"].fillna(df["city"].mode()[0])
+```
+
+**5. 前向 / 后向填充**——适合时间序列数据，用上一个（或下一个）有效值补
+
+```python
+# 前向填充：用前一行有效值填充
+df["temperature"] = df["temperature"].fillna(method="ffill")
+
+# 后向填充：用后一行有效值填充
+df["temperature"] = df["temperature"].fillna(method="bfill")
+
+# 也可以限制填充范围，防止"传染"太远
+df["temperature"] = df["temperature"].fillna(method="ffill", limit=3)
+```
+
+**6. 插值填充**——适合连续变化的数据，在相邻值之间做平滑过渡
+
+```python
+# 线性插值：在两个已知点之间画一条直线
+df["temperature"] = df["temperature"].interpolate(method="linear")
+
+# 时间序列可以用时间加权插值
+df["temperature"] = df["temperature"].interpolate(method="time")
+```
+
+**7. 分组填充**——按某个分组维度各自的统计量填充，比全局均值合理得多
+
+```python
+# 按城市分组，用各自城市的平均收入填充，而不是全局平均
+df["income"] = df.groupby("city")["income"].transform(
+    lambda x: x.fillna(x.median())
+)
+```
+
+这个分组填充是实际工作中最常用也最被低估的策略——它既利用了数据中的结构，又避免了"全国平均收入填到一线城市"的荒谬。
+
+### np.nan 与 pd.NA 的区别
+
+补充一个容易踩坑的知识点。NumPy 的 `np.nan` 是浮点数专用标记，放到整数列会导致整列类型升级为 float：
+
+```python
+import numpy as np
+
+arr = np.array([1, 2, np.nan, 4])
+print(arr.dtype)  # float64 —— 整列被升级了
+```
+
+Pandas 1.0 引入了 `pd.NA`，它是"真正的"跨类型缺失标记，配合 `Int64`（大写 I）可以保持整型：
+
+```python
+s = pd.Series([1, 2, pd.NA, 4], dtype="Int64")
+print(s)
+# 0       1
+# 1       2
+# 2    <NA>
+# 3       4
+# dtype: Int64     ← 整型保持住了
+```
+
+大多数日常场景下这个差异不明显，但在做数值聚合、类型断言时可能引发意外的行为。知道就好。
+
+---
+
+## 数据类型转换：让数据"各归其位"
+
+数据导入时，Pandas 常常会把数字识别成字符串、把日期识别成字符串、把分类变量也识别成字符串。类型不对，后续分析就步步踩坑。
+
+### 字符串转数字：pd.to_numeric()
+
+这是你最频繁会用到的转换操作：
+
+```python
+# 场景：amount 列是字符串，混了 "N/A" 和 "免费" 这样的非数字
+print(df["amount"].dtype)  # object
+
+# 一步转数字 + 容错
+df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
+# errors='coerce'：无法转换的值全部变 NaN，不报错中断
+# errors='raise'：遇到一个非法值就抛异常（默认）
+# errors='ignore'：完全不转换，保持原样（极少用）
+
+# 看看哪些值转换失败了
+invalid = df[df["amount"].isna() & df["amount_original"].notna()]
+print(f"转换失败 {len(invalid)} 条")
+```
+
+配合 NumPy 做范围约束也是常用的组合：
+
+```python
+# 确保金额在合理范围内
+df["amount"] = np.clip(df["amount"], 0, 999999)
+# 小于 0 变成 0，大于 999999 变成 999999
+```
+
+### 日期时间解析：pd.to_datetime()
+
+日期是数据清洗中的重灾区。同一个字段里可能出现 `2024/1/5`、`01-05-2024`、`2024年1月5日`——甚至 `2024.1.5`（Excel 的"创意"日期格式）。
+
+```python
+# 最基础的用法
+df["order_time"] = pd.to_datetime(df["order_time"])
+
+# 性能优化的关键：指定 format 参数
+df["order_time"] = pd.to_datetime(df["order_time"], format="%Y-%m-%d %H:%M:%S")
+# 指定格式比自动推断快 5-10 倍，大文件必须用
+
+# 歧义日期的救星：dayfirst / yearfirst
+df["date"] = pd.to_datetime(df["date"], dayfirst=True)
+# 01-02-2024 是 2 月 1 日还是 1 月 2 日？dayfirst=True 告诉你答案
+
+# 容错处理
+df["order_time"] = pd.to_datetime(df["order_time"], errors="coerce")
+```
+
+常用格式代码速查：`%Y` 四位年、`%m` 两位月、`%d` 两位日、`%H` 24 小时制、`%M` 分钟、`%S` 秒。
+
+### 分类变量优化：.astype("category")
+
+这是一个经常被忽略但收益巨大的操作。把"性别""城市""品类"这类重复值很多的字符串列转为 category 类型，内存占用能骤降 90% 以上：
+
+```python
+# 优化前
+print(df["city"].memory_usage(deep=True))  # 比如 650KB
+
+# 优化后
+df["city"] = df["city"].astype("category")
+print(df["city"].memory_usage(deep=True))  # 比如 8KB
+```
+
+处理百万行数据时，这种累积效果非常可观。而且 category 类型在 `groupby`、`value_counts` 等操作上通常更快。
+
+### NumPy 的 dtype 系统
+
+当你的场景对内存很敏感时，Pandas 默认的 float64/int64 其实很"浪费"——很多数据根本不需要 64 位精度：
+
+```python
+# 默认是 float64（8 字节）
+df["score"] = df["score"].astype(np.float32)   # 4 字节，精度够用
+
+# 年龄 0-120，int8（1 字节）就够
+df["age"] = df["age"].astype(np.int8)
+
+# 查看所有列的 dtype 和内存占用
+df.info(memory_usage="deep")
+```
+
+经验法则：能用 float32 就别用 float64，能用 int32 就别用 int64，分类变量一律转 category。这些操作不改变分析结果，但让你的代码跑得更快、内存占用更少。
+
+---
+
+## 重复值处理：去重不是一刀切
+
+### 完全重复行 vs 关键列重复
+
+```python
+# 找完全重复的行
+duplicates = df[df.duplicated()]
+print(f"完全重复行：{len(duplicates)} 条")
+
+# 一键删除完全重复，保留第一次出现的
+df = df.drop_duplicates()
+
+# 更实用的场景：按关键列去重
+# 比如同一个 order_id 出现了两次，你想保留最新的那条
+df = df.sort_values("order_time").drop_duplicates(
+    subset=["order_id"],
+    keep="last",     # "first" 保留最早的 / "last" 保留最新的 / False 全删
+)
+```
+
+`keep` 参数的业务含义往往比语法本身更重要：
+
+| keep 值 | 含义 | 典型场景 |
+|---------|------|---------|
+| `"first"` | 保留第一条，删除后续重复 | 用户注册记录——最早的注册时间为准 |
+| `"last"` | 保留最后一条，删除前面重复 | 订单状态更新——最新的状态为准 |
+| `False` | 全部删除 | 不确定哪条是对的，宁可全删也不要错 |
+
+### 去重前先搞清楚原因
+
+重复数据分三种成因，处理思路不同：
+
+1. **系统 bug 导致的纯冗余** → 直接删，没话说
+2. **正常的数据更新**（同一个 ID 出现了多次是因为状态在变化） → 用 `keep="last"`，保留最新状态
+3. **"碰巧"看起来重复**（不同的人恰好同名同年龄）→ **不要删**，这不是重复
+
+第三种情况尤其需要注意。去重之前多问一句：**"这两行的重复是逻辑上的还是巧合上的？"**
+
+---
+
+## 异常值检测：用数据说话
+
+异常值（outlier）不等于错误值。一笔 10 万的大额订单可能是 VIP 客户的正常消费，也可能是系统计算 bug。**检测是为了发现问题，不是为了自动删除。**
+
+### 先看分布，再动手
+
+```python
+import matplotlib.pyplot as plt
+
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+# 直方图：看整体分布
+axes[0].hist(df["amount"].dropna(), bins=50, edgecolor="black", alpha=0.7)
+axes[0].set_title("金额分布直方图")
+axes[0].set_xlabel("金额")
+axes[0].set_ylabel("频数")
+
+# 箱线图：看异常值
+axes[1].boxplot(df["amount"].dropna(), vert=True)
+axes[1].set_title("金额箱线图")
+axes[1].set_ylabel("金额")
+
+plt.tight_layout()
+plt.show()
+```
+
+箱线图里那些远远飘在胡须之外的圆点，就是统计学意义上的异常值。但这些点要不要处理，最终还是取决于你的业务知识。
+
+### Z-Score 方法（3σ 原则）
+
+Z-Score 衡量的是**一个数据点偏离均值多少个标准差**。如果数据服从正态分布，超过 3 个标准差的值出现的概率约 0.3%。
+
+公式很简单：
+
+$$
+z = \frac{x - \mu}{\sigma}
+$$
+
+其中 $\mu$ 是均值，$\sigma$ 是标准差。
+
+```python
+from scipy import stats
+
+# 计算每行的 Z-Score
+df["amount_zscore"] = np.abs(stats.zscore(df["amount"].fillna(df["amount"].median())))
+
+# 标记异常：Z-Score > 3
+outliers_z = df[df["amount_zscore"] > 3]
+print(f"Z-Score 方法检测到 {len(outliers_z)} 个异常值")
+```
+
+**Z-Score 的弱点：** 均值和标准差本身对极端值很敏感。如果数据里已经混入了几个极大的异常值，均值会被拉高，标准差会被放大，导致真正应该被标记的异常值反而"看起来正常"了。这就是为什么我们还需要 IQR 方法。
+
+### IQR 四分位距法
+
+IQR（Interquartile Range）完全基于排序位置，不受极端值影响：
+
+$$
+IQR = Q_3 - Q_1
+$$
+
+异常值的上下边界为：
+
+$$
+[Q_1 - 1.5 \times IQR,\quad Q_3 + 1.5 \times IQR]
+$$
+
+```python
+Q1 = df["amount"].quantile(0.25)
+Q3 = df["amount"].quantile(0.75)
+IQR = Q3 - Q1
+
+lower_bound = Q1 - 1.5 * IQR
+upper_bound = Q3 + 1.5 * IQR
+
+outliers_iqr = df[(df["amount"] < lower_bound) | (df["amount"] > upper_bound)]
+print(f"IQR 方法检测到 {len(outliers_iqr)} 个异常值")
+print(f"合理范围：[{lower_bound:.2f}, {upper_bound:.2f}]")
+```
+
+### 两种方法对比
+
+| 特性 | Z-Score | IQR |
+|------|---------|-----|
+| 原理 | 偏离均值多少个标准差 | 超出四分位范围多少倍 |
+| 对极端值敏感？ | **是**——均值和标准差被拉偏 | **否**——基于排序位置 |
+| 适用数据 | 近似正态分布 | 任意分布 |
+| 推荐程度 | 快速初筛 | **更稳健，优先使用** |
+
+### 检测到异常值后怎么办？
+
+四种处理策略，按推荐程度排序：
+
+| 策略 | 做法 | 适用场景 |
+|------|------|---------|
+| **保留** | 不做任何处理 | 确认是合法极端值（如 VIP 大额订单），分析时需要它们 |
+| **截断** | 超出上界的拉到上界，低于下界的拉到下界 | 值本身合理但范围需要控制（如评分系统 1-5 分） |
+| **替换** | 用均值/中位数/边界值替代 | 确认是错误但又不想删行 |
+| **删除** | 直接去掉这行 | 确认是数据采集错误，且占比很小 |
+
+```python
+# 截断（Winsorize）
+df["amount_clipped"] = df["amount"].clip(lower_bound, upper_bound)
+
+# 替换为中位数
+median_val = df["amount"].median()
+df.loc[(df["amount"] < lower_bound) | (df["amount"] > upper_bound), "amount"] = median_val
+```
+
+**核心原则：在不确定的情况下，宁可多留少删。** 删掉的数据回不来了，但留在那里你随时可以用条件过滤掉。
+
+---
+
+## 字符串清洗：Pandas .str 访问器
+
+正则表达式很强大，但大部分日常字符串清洗根本不需要正则。Pandas 的 `.str` 访问器把 Python 的字符串方法搬到了整列操作上，向量化批量处理。
+
+```python
+# 去除首尾空格（最常用的操作，没有之一）
+df["name"] = df["name"].str.strip()
+
+# 统一大小写
+df["email"] = df["email"].str.lower()
+
+# 替换子串
+df["phone"] = df["phone"].str.replace("-", "", regex=False)
+
+# 判断是否包含某模式
+has_error = df["notes"].str.contains("异常", na=False)
+```
+
+如果你想用正则提取，`.str.extract()` 非常方便：
+
+```python
+# 从混乱文本中提取第一个匹配的数字串
+df["extracted_number"] = df["notes"].str.extract(r"(\d+)")
+```
+
+### 实战：清洗混乱的电话号码列
+
+这是每个数据分析师迟早都会遇到的场景——用户填的电话号码千奇百怪：
+
+```python
+# 原始数据（模拟）
+phones = pd.Series([
+    "13812345678",         # 正常手机号
+    "010-82345678",        # 座机带区号
+    "139 1234 5678",       # 中间有空格
+    "（021）62345678",     # 中文括号+区号
+    "无",                  # 非号码文本
+    "",                    # 空字符串
+    "13812345678999",      # 明显太长了
+    "021-62345678-808",    # 座机带分机号
+])
+
+df_phone = pd.DataFrame({"raw": phones})
+
+# 清洗流程
+df_phone["cleaned"] = (
+    df_phone["raw"]
+    .str.strip()                                    # 1. 去首尾空格
+    .str.replace(r"[（()\s\-（）]", "", regex=True) # 2. 统一去括号和分隔符
+)
+
+# 过滤：只保留 11 位（手机号）或 10-12 位（座机含区号）的数字串
+is_valid = (
+    df_phone["cleaned"].str.match(r"^\d{10,12}$")
+    & ~df_phone["cleaned"].str.contains("^0{3,}")   # 排除纯零
+)
+valid_phones = df_phone[is_valid]
+print(f"有效号码：{len(valid_phones)} / {len(df_phone)}")
+```
+
+Pandas 的 `.str` 方法比写循环快一个数量级，因为它底层是向量化的——处理百万行数据和处理十行数据，写法一模一样，只是等的时间长一点。
+
+一个小提醒：`.str` 方法在遇到 `NaN` 时会返回 `NaN` 而不是报错，这是善意的设计——你不必在清洗前先把缺失值单独处理掉。
+
+---
+
+## 实战演练：一份脏数据的完整清洗流水线
+
+下面我们把前面学到的所有技巧串起来，清洗一份模拟的电商订单数据。
+
+### 数据集介绍与问题清单
+
+```python
+import pandas as pd
+import numpy as np
+
+# 构造一份"脏"数据
+np.random.seed(42)
+n = 1000
+
+df = pd.DataFrame({
+    "order_id":    [f"ORD-{i:06d}" for i in range(n)],
+    "customer":    np.random.choice(["张三", "李四", "王五", None], n, p=[0.3, 0.3, 0.3, 0.1]),
+    "amount":      np.random.choice(["正常", "99.9", "199.5", "abc", "0", ""], n),
+    "order_time":  np.random.choice(["2024-01-15", "2024/1/16", "无", "2024-13-01", ""], n),
+    "city":        np.random.choice(["北京", "上海", "广州", "深圳", None, "上海 "], n),
+    "phone":       np.random.choice(["13800001111", "010-88888888", "bad", "", None], n),
+    "status":      np.random.choice(["已完成", "处理中", "", None], n),
+})
+# 故意插入一些重复行
+df = pd.concat([df, df.iloc[:20]], ignore_index=True)
+
+print(f"原始数据：{len(df)} 行 × {len(df.columns)} 列")
+```
+
+拿到数据后先列出问题清单：
+
+| # | 问题 | 涉及列 |
+|---|------|--------|
+| 1 | `customer` 有 10% 缺失 | customer |
+| 2 | `amount` 是字符串，混了 "abc""正常" 等非数字 | amount |
+| 3 | `order_time` 格式不统一，有无效日期 "2024-13-01" | order_time |
+| 4 | `city` 有缺失，且 "上海 " 末尾带空格 | city |
+| 5 | `phone` 混杂了空值和无效字符串 | phone |
+| 6 | `status` 有空字符串和缺失 | status |
+| 7 | 末尾有 20 条完全重复的行 | 全部列 |
+
+### 清洗流水线
+
+```python
+# ============================================
+# 第一步：导入 + 概览
+# ============================================
+print("=" * 50)
+print("第一步：概览")
+print("=" * 50)
+print(f"行数：{len(df)}")
+print(f"\n数据类型：\n{df.dtypes}")
+print(f"\n缺失值统计：\n{df.isna().sum()}")
+print(f"\n重复行数：{df.duplicated().sum()}")
+
+# ============================================
+# 第二步：去重
+# ============================================
+print("\n" + "=" * 50)
+print("第二步：去重")
+print("=" * 50)
+before = len(df)
+df = df.drop_duplicates()
+print(f"删除 {before - len(df)} 条重复行，剩余 {len(df)} 条")
+
+# ============================================
+# 第三步：字符串列统一清洗
+# ============================================
+print("\n" + "=" * 50)
+print("第三步：字符串清洗")
+print("=" * 50)
+# 去首尾空格，空字符串变 NaN
+for col in ["customer", "city", "phone", "status"]:
+    df[col] = df[col].str.strip() if df[col].dtype == "object" else df[col]
+    df[col] = df[col].replace("", np.nan)
+
+# ============================================
+# 第四步：缺失值处理
+# ============================================
+print("\n" + "=" * 50)
+print("第四步：缺失值处理")
+print("=" * 50)
+# customer: 关键列，缺失 < 5%，删行
+df = df.dropna(subset=["customer"])
+print(f"删除 customer 缺失后：{len(df)} 行")
+
+# city: 填众数
+df["city"] = df["city"].fillna(df["city"].mode()[0])
+
+# status: 填"未知"
+df["status"] = df["status"].fillna("未知")
+
+# phone: 缺失较多但非关键分析字段，填"未提供"
+df["phone"] = df["phone"].fillna("未提供")
+
+# ============================================
+# 第五步：类型转换
+# ============================================
+print("\n" + "=" * 50)
+print("第五步：类型转换")
+print("=" * 50)
+# amount: 字符串转数字
+df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
+invalid_amount = df["amount"].isna().sum()
+print(f"amount 转换失败：{invalid_amount} 条，用中位数填充")
+df["amount"] = df["amount"].fillna(df["amount"].median())
+
+# order_time: 字符串转日期
+df["order_time"] = pd.to_datetime(df["order_time"], errors="coerce")
+invalid_time = df["order_time"].isna().sum()
+print(f"order_time 转换失败：{invalid_time} 条，删除")
+df = df.dropna(subset=["order_time"])
+
+# city 转 category
+df["city"] = df["city"].astype("category")
+
+# ============================================
+# 第六步：异常值检测
+# ============================================
+print("\n" + "=" * 50)
+print("第六步：异常值检测")
+print("=" * 50)
+Q1 = df["amount"].quantile(0.25)
+Q3 = df["amount"].quantile(0.75)
+IQR = Q3 - Q1
+lower = Q1 - 1.5 * IQR
+upper = Q3 + 1.5 * IQR
+outliers = df[(df["amount"] < lower) | (df["amount"] > upper)]
+print(f"IQR 异常值：{len(outliers)} 条（{len(outliers)/len(df)*100:.1f}%）")
+print(f"  合理范围：[{lower:.2f}, {upper:.2f}]")
+print(f"  异常值样本：{outliers['amount'].head(3).tolist()}")
+# 这里假设检查后确认是正常的高客单价订单，保留不删
+
+# ============================================
+# 第七步：最终验证
+# ============================================
+print("\n" + "=" * 50)
+print("第七步：最终验证")
+print("=" * 50)
+print(f"\n最终数据：{len(df)} 行 × {len(df.columns)} 列")
+print(f"\n缺失值：\n{df.isna().sum()}")
+print(f"\n数据类型：\n{df.dtypes}")
+print(f"\n描述统计：\n{df['amount'].describe()}")
+```
+
+### 清洗前后对比
+
+| 指标 | 清洗前 | 清洗后 |
+|------|--------|--------|
+| 行数 | 1020 | ~980 |
+| 缺失值 | 分布 6 列，最多超 30% | **0** |
+| amount 类型 | object（字符串） | **float64** |
+| order_time 类型 | object（字符串） | **datetime64** |
+| 无效金额条目 | 混有 "abc""正常" 等 | **0** |
+| 重复行 | 20 条 | **0** |
+| city 格式 | 有尾部空格 | **统一干净** |
+
+整个清洗流水线的代码如果你原样复制到项目里，只需要修改列名和阈值，就能直接跑——这就是标准化流程的价值。
+
+---
+
+## 总结：清洗操作速查表
+
+本文涉及的全部操作方法汇总：
+
+| 任务 | Pandas / NumPy 方法 | 一句话要点 |
+|------|-------------------|-----------|
+| 导入数据 | `pd.read_csv(encoding, sep, na_values)` | 提前声明编码、分隔符和空值标记 |
+| 分块读大文件 | `pd.read_csv(chunksize=N)` | 逐块读、逐块洗、最后 concat |
+| 概览 | `.info()` `.describe()` `.sample()` | 动手前先"相面" |
+| 定位缺失值 | `.isna().sum()` + `sns.heatmap()` | 数字 + 可视化双管齐下 |
+| 删缺失行 | `.dropna(subset, thresh)` | < 5% 缺失直接删行 |
+| 删缺失列 | `.dropna(axis=1, thresh)` | > 50% 缺失考虑删列 |
+| 固定值填充 | `.fillna(value)` | 有明确默认值时首选 |
+| 统计量填充 | `.fillna(.mean()/.median()/.mode()[0])` | 数值用中位数，分类用众数 |
+| 前后向填充 | `.fillna(method="ffill"/"bfill")` | 时间序列专用 |
+| 插值填充 | `.interpolate(method="linear")` | 连续数据平滑填充 |
+| 分组填充 | `.groupby().transform(lambda x: x.fillna(...))` | 按组统计量填充，最合理 |
+| 字符串转数字 | `pd.to_numeric(errors="coerce")` | coerce 是灵魂参数 |
+| 解析日期 | `pd.to_datetime(format, dayfirst)` | 指定 format 大幅提速 |
+| 数值截断 | `np.clip(arr, low, high)` | 一行代码代替条件判断 |
+| 优化内存 | `.astype("category")` `.astype(np.float32)` | 不改结果，大幅降内存 |
+| 查找重复 | `.duplicated(subset)` | subset 按关键列判断 |
+| 去重 | `.drop_duplicates(subset, keep)` | keep 参数对应业务语义 |
+| Z-Score 检测 | `np.abs(stats.zscore(x)) > 3` | 快速但受极端值影响 |
+| IQR 检测 | `Q1 - 1.5*IQR` / `Q3 + 1.5*IQR` | 更稳健，优先使用 |
+| 字符串批量操作 | `.str.strip()` `.str.replace()` `.str.extract()` | 向量化，比循环快一个数量级 |
+| 条件替换 | `df.loc[mask, col] = value` | 精准修改，不动其他行 |
+
+数据清洗不是机械操作。每一行被删除的数据都有一个原因，每一个填充值都有一个假设。**你在清洗数据的同时，也在建立对数据的理解。** 下次拿到一份新数据时，希望这篇文章能让你下手更有底气。

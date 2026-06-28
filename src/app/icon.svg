@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="m-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <!-- 深色圆角背景 -->
+  <rect width="32" height="32" rx="8" fill="#0f172a"/>
+  <!-- 字母 M -->
+  <path
+    d="M 7 24 L 7 8 L 16 15 L 25 8 L 25 24"
+    stroke="url(#m-grad)"
+    stroke-width="4"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+    fill="none"
+  />
+</svg>

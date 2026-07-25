@@ -5,6 +5,7 @@ import { MDXComponents } from "@/components/MDXComponents";
 import TOC from "@/components/TOC";
 import ReadingProgress from "@/components/ReadingProgress";
 import GiscusComments from "@/components/GiscusComments";
+import ImageZoomProvider from "@/components/ImageZoomProvider";
 import Link from "next/link";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -125,21 +126,23 @@ export default async function PostPage({ params }: PageProps) {
           </header>
 
           {/* Content */}
-          <div className="prose dark:prose-invert">
-            <MDXRemote
-              source={post.content}
-              components={MDXComponents}
-              options={{
-                mdxOptions: {
-                  remarkPlugins: [remarkGfm, remarkMath],
-                  rehypePlugins: [
-                    rehypeKatex,
-                    [rehypePrettyCode, { theme: "github-dark", keepBackground: false }],
-                  ],
-                },
-              }}
-            />
-          </div>
+          <ImageZoomProvider>
+            <div className="prose dark:prose-invert">
+              <MDXRemote
+                source={post.content}
+                components={MDXComponents}
+                options={{
+                  mdxOptions: {
+                    remarkPlugins: [remarkGfm, remarkMath],
+                    rehypePlugins: [
+                      rehypeKatex,
+                      [rehypePrettyCode, { theme: "github-dark", keepBackground: false }],
+                    ],
+                  },
+                }}
+              />
+            </div>
+          </ImageZoomProvider>
 
           {/* Prev/Next */}
           <nav className="mt-12 flex items-center justify-between border-t border-slate-200 pt-8 dark:border-slate-700">

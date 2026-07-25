@@ -81,7 +81,7 @@ export function getAdjacentPosts(slug: string): { prev: Post | null; next: Post 
   const posts = getAllPosts();
   const index = posts.findIndex((p) => p.slug === slug);
   return {
-    prev: index > 0 ? posts[index - 1] : null,
-    next: index < posts.length - 1 ? posts[index + 1] : null,
+    prev: index < posts.length - 1 ? posts[index + 1] : null,
+    next: index > 0 ? posts[index - 1] : null,
   };
 }

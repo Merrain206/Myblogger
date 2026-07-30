@@ -2,6 +2,36 @@ import type { Project } from "@/lib/types";
 
 export const projects: Project[] = [
   {
+    title: "Flowtide 心流潮汐",
+    slug: "flowtide",
+    description:
+      "让专注与休息像潮汐一样自然涨落的 AI 专注番茄钟。心流保护 + 分层声景混音 + 音乐联动 + AI 目标计划与复盘，数据全部存于本机。",
+    techStack: ["React 19", "TypeScript", "Capacitor", "Vite", "Web Audio API", "DeepSeek", "PWA"],
+    githubUrl: "https://github.com/Merrain206/Flowtide",
+    demoUrl: "https://merrain.cn/download/flowtide/app/",
+    imageUrl: "/images/flowtide/shot-home.png",
+    featured: true,
+    longDescription: `Flowtide（心流潮汐）是一个以自适应音频环境为核心的 AI 专注管家。它不是固定 25/5 的计时器，而是一个尊重心流的状态机——专注到点不粗暴打断，状态正好时自动进入心流保护段，让节奏自己流动起来。
+
+核心技术栈为 React 19 + TypeScript + Vite，专注引擎（\`src/core/\`）为纯 TS、零框架依赖，可直接迁入 Tauri / Worker。已通过 Capacitor 打包为 Android APK，同时部署了 PWA 在线体验版。
+
+在线体验版可直接在浏览器中运行：**无需安装**，打开即用番茄钟、声景混音和任务队列（音乐播放和原生通知为 App 专属功能）。完整功能请下载 Android APK。`,
+    features: [
+      "自适应番茄钟状态机：待命 → 专注 → 心流延长(柔性保护) → 短/长休息，到点不粗暴打断",
+      "心流保护机制：专注到点自动进入延长段，状态正好时继续冲，一键落地休息",
+      "分层声景混音引擎：基底层(雨声/溪流/白噪) + 氛围层(微风/咖啡馆) + 律动层(θ波/α波)，三档预设可单独调节",
+      "Web Audio API 程序化合成：零音频素材文件、零版权问题，所有声景实时生成",
+      "网易云音乐联动：扫码登录播放自己的歌单，进入专注自动压低音乐、突出声景，休息时自然回升",
+      "本地音乐导入：拖入 mp3/flac/wav 直接播放，专注联动压音，文件不上传",
+      "AI 目标计划引擎：说出目标和截止日期，LLM 拆成分阶段计划，每天任务自动注入番茄钟队列",
+      "AI 日程提取：粘贴日程文字自动识别任务、时间和认知负荷，一键导入番茄钟",
+      "精力复盘看板：时段热力图找到黄金专注时间，AI 周报把一周的专注讲成叙事",
+      "会话恢复：专注中刷新/关页/杀后台，重新打开无缝续跑，不丢一轮数据",
+      "Local-first 隐私优先：专注记录默认仅存本机，无第三方统计与广告",
+      "PWA 离线可用 + Capacitor Android APK（约 4 MB），桌面/移动端全覆盖",
+    ],
+  },
+  {
     title: "课堂 AI 领航员",
     slug: "teaching-agent",
     description:

@@ -1,6 +1,6 @@
 # MyBlogger
 
-基于 Next.js 15 + MDX 的个人博客系统，集成五子棋在线对战、构词法记单词和周易六爻排盘解卦工具。
+基于 Next.js 15 + MDX 的个人博客系统，集成五子棋在线对战、构词法记单词、周易六爻排盘解卦、车票生成器和 Hermes 图片同步工具。
 
 ## 功能特性
 
@@ -57,6 +57,7 @@
 | Fuse.js | 客户端全文搜索 |
 | rehype-pretty-code + Shiki | 代码高亮 |
 | remark-gfm + remark-math | GitHub 风格 Markdown + 数学公式 |
+| remark-breaks | Markdown 单换行转 `<br>` |
 | rehype-katex | KaTeX 数学公式渲染 |
 | react-markdown | AI 解卦 Markdown 渲染 |
 | date-fns | 日期格式化 |
@@ -86,8 +87,11 @@ npm start          # 启动生产服务器
 │   ├── app/
 │   │   ├── about/                # 关于页
 │   │   ├── api/gomoku/           # 五子棋排行榜 + 房间状态 API
-│   │   ├── api/tools/yijing/      # 周易 AI 解卦 API
+│   │   ├── api/tools/yijing/     # 周易认证 + AI 解卦 + 存档 API
+│   │   ├── api/tools/ticket/     # 车票 AI 文本解析 API
+│   │   ├── api/hermes/           # Hermes 同步 + 图片列表 API
 │   │   ├── blog/                 # 博客列表 + 文章详情
+│   │   ├── tags/                 # 标签聚合页
 │   │   ├── gomoku/
 │   │   │   ├── online/room/      # 在线房间对战页
 │   │   │   ├── play/             # AI 对战页

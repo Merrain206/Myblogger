@@ -71,11 +71,12 @@ src/
 │   ├── PostCard.tsx / ProjectCard.tsx / TicketPreview.tsx
 │   ├── SearchBar.tsx / TagFilter.tsx  # 博客搜索与过滤
 │   ├── TOC.tsx / BackToTop.tsx / ReadingProgress.tsx  # 阅读体验
+│   ├── ImageZoomProvider.tsx        # 博客图片点击放大（事件代理）
 │   ├── MDXComponents.tsx / GiscusComments.tsx  # MDX 渲染 + 评论
 │   ├── yijing/                  # 周易工具组件 (爻选择器/排盘/AI解卦)
 │   └── vocabulary/             # 词汇工具专属组件
 ├── content/
-│   ├── posts/                  # .mdx 文章文件 (9 篇)
+│   ├── posts/                  # .mdx 文章文件 (13 篇)
 │   └── projects.ts            # 项目数据 (静态数组)
 ├── lib/
 │   ├── auth/route-auth.ts      # 共享 HMAC auth (signToken/verifyToken)

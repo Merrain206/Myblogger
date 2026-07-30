@@ -8,6 +8,7 @@ const navLinks = [
   { href: "/", label: "首页" },
   { href: "/blog", label: "博客" },
   { href: "/projects", label: "项目" },
+  { href: "/flowtide", label: "Flowtide" },
   { href: "/gomoku", label: "五子棋" },
   { href: "/tools", label: "工具箱" },
   { href: "/about", label: "关于" },

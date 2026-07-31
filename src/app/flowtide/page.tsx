@@ -24,6 +24,31 @@ export const metadata: Metadata = {
   },
 };
 
+/** 从 latest.json 获取最新版本信息，失败时降级为默认值 */
+async function getLatestRelease(): Promise<{
+  versionName: string;
+  downloadUrl: string;
+}> {
+  try {
+    const res = await fetch(
+      "https://merrain.cn/download/flowtide/latest.json",
+      { next: { revalidate: 3600 } } // ISR：每小时刷新一次
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return {
+      versionName: data.versionName || "0.9.5",
+      downloadUrl: data.url || "https://merrain.cn/download/flowtide/flowtide-0.9.5.apk",
+    };
+  } catch {
+    // 降级：fetch 失败时用硬编码兜底（至少保证页面不崩）
+    return {
+      versionName: "0.9.5",
+      downloadUrl: "https://merrain.cn/download/flowtide/flowtide-0.9.5.apk",
+    };
+  }
+}
+
 const screenshots = [
   { src: "/images/flowtide/shot-home.png", label: "🍅 番茄钟 + 任务队列", alt: "Flowtide 主界面：番茄钟与任务队列" },
   { src: "/images/flowtide/shot-sound.png", label: "🎧 三档专业声景", alt: "声景面板：深度专注 / 轻度工作 / 休息放松 三档预设" },
@@ -80,7 +105,9 @@ const steps = [
   <>应用内置<strong>自动检查更新</strong>，新版本发布后打开应用即会收到提示。</>,
 ];
 
-export default function FlowtidePage() {
+export default async function FlowtidePage() {
+  const latest = await getLatestRelease();
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
       {/* ── Hero ── */}
@@ -101,7 +128,7 @@ export default function FlowtidePage() {
         {/* 下载按钮 */}
         <div className="flex flex-col items-center gap-3">
           <a
-            href="https://merrain.cn/download/flowtide/flowtide-0.9.3.apk"
+            href={latest.downloadUrl}
             className="inline-flex items-center gap-2 rounded-full bg-primary-500 px-8 py-3.5 text-lg font-semibold text-white shadow-lg shadow-primary-500/25 transition-all hover:-translate-y-0.5 hover:bg-primary-600 hover:shadow-xl hover:shadow-primary-500/30 active:scale-[0.97]"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -109,7 +136,7 @@ export default function FlowtidePage() {
             </svg>
             下载 Android 版
           </a>
-          <span className="text-sm text-slate-400 dark:text-slate-500">v0.9.3 · Android 7.0+ · 约 4 MB</span>
+          <span className="text-sm text-slate-400 dark:text-slate-500">v{latest.versionName} · Android 7.0+ · 约 4 MB</span>
           <div className="mt-1 flex flex-wrap justify-center gap-2">
             {["🔒 数据仅存本机", "🚫 无广告无统计", "📦 安装包不到 4 MB"].map((badge) => (
               <span
@@ -214,13 +241,13 @@ export default function FlowtidePage() {
       {/* ── 底部 CTA ── */}
       <div className="text-center">
         <a
-          href="https://merrain.cn/download/flowtide/flowtide-0.9.3.apk"
+          href={latest.downloadUrl}
           className="inline-flex items-center gap-2 rounded-full bg-primary-500 px-8 py-3.5 text-lg font-semibold text-white shadow-lg shadow-primary-500/25 transition-all hover:-translate-y-0.5 hover:bg-primary-600 hover:shadow-xl hover:shadow-primary-500/30 active:scale-[0.97]"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          立即下载 v0.9.3
+          立即下载 v{latest.versionName}
         </a>
         <p className="mt-6 text-xs text-slate-400 dark:text-slate-500">
           Flowtide · 数据仅存于本地 (local-first) · 无第三方统计与广告

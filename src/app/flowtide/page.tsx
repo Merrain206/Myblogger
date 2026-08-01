@@ -121,9 +121,14 @@ export default async function FlowtidePage() {
         <p className="mb-2 text-lg leading-relaxed text-slate-500 dark:text-slate-400">
           让专注与休息像潮汐一样自然涨落的 AI 专注番茄钟
         </p>
-        <p className="mb-8 text-sm text-slate-400 dark:text-slate-500">
+        <p className="mb-4 text-sm text-slate-400 dark:text-slate-500">
           心流保护 · 专业声景 · 音乐联动 · AI 计划与复盘
         </p>
+
+        {/* 波浪装饰 */}
+        <svg className="mx-auto mb-8 w-[110px] text-primary-500 opacity-70" viewBox="0 0 72 12" fill="none" aria-hidden="true">
+          <path d="M2 8c5-6 9-6 14 0s9 6 14 0 9-6 14 0 9 6 14 0 9-6 12-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
 
         {/* 下载按钮 */}
         <div className="flex flex-col items-center gap-3">
@@ -136,7 +141,7 @@ export default async function FlowtidePage() {
             </svg>
             下载 Android 版
           </a>
-          <span className="text-sm text-slate-400 dark:text-slate-500">v{latest.versionName} · Android 7.0+ · 约 4 MB</span>
+          <span className="text-sm text-slate-400 dark:text-slate-500">v{latest.versionName} · Android 7.0+ / 鸿蒙 4.x · 约 4 MB</span>
           <div className="mt-1 flex flex-wrap justify-center gap-2">
             {["🔒 数据仅存本机", "🚫 无广告无统计", "📦 安装包不到 4 MB"].map((badge) => (
               <span
@@ -146,6 +151,16 @@ export default async function FlowtidePage() {
                 {badge}
               </span>
             ))}
+          </div>
+          <div className="mt-4">
+            <a
+              href="https://merrain.cn/download/flowtide/app/"
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-2 rounded-full border-2 border-primary-500 px-6 py-2.5 text-sm font-semibold text-primary-600 transition-colors hover:bg-blue-50 dark:text-primary-400 dark:hover:bg-blue-950/30"
+            >
+              🖥 在线尝鲜版（Windows / Mac 浏览器直接用）
+            </a>
           </div>
         </div>
       </header>
@@ -238,6 +253,36 @@ export default async function FlowtidePage() {
         </div>
       </section>
 
+      {/* ── 鸿蒙与其他平台 ── */}
+      <section className="mb-16">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 dark:border-slate-700 dark:bg-slate-800">
+          <h2 className="mb-6 text-xl font-bold text-slate-900 dark:text-slate-100">📱 鸿蒙与其他平台</h2>
+          <ol className="space-y-4">
+            {[
+              <>
+                <strong>鸿蒙 HarmonyOS 4.x 及更早版本</strong>：兼容 Android 应用，直接下载上方 APK 安装即可，体验与 Android 完全一致。
+              </>,
+              <>
+                <strong>纯血鸿蒙 HarmonyOS NEXT（不支持 APK）</strong>：用浏览器打开<strong>在线尝鲜版</strong>，可添加到桌面像应用一样使用；原生版本在规划中。
+              </>,
+              <>
+                <strong>Windows / Mac 桌面</strong>：直接用浏览器打开在线尝鲜版，Chrome/Edge 地址栏右侧可<strong>「安装为应用」</strong>获得独立窗口体验；数据同样只存在本机浏览器里。
+              </>,
+              <>在线版为<strong>尝鲜体验</strong>：不支持锁屏后台提醒、震动、手环协同等需要系统能力的功能，完整体验请用 Android 版。</>,
+            ].map((item, i) => (
+              <li key={i} className="flex gap-4">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-primary-600 dark:bg-blue-900/40 dark:text-primary-400">
+                  {i + 1}
+                </span>
+                <span className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                  {item}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
       {/* ── 底部 CTA ── */}
       <div className="text-center">
         <a
@@ -249,6 +294,16 @@ export default async function FlowtidePage() {
           </svg>
           立即下载 v{latest.versionName}
         </a>
+        <p className="mt-4">
+          <a
+            href="https://merrain.cn/download/flowtide/app/"
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-primary-500 px-6 py-2.5 text-sm font-semibold text-primary-600 transition-colors hover:bg-blue-50 dark:text-primary-400 dark:hover:bg-blue-950/30"
+          >
+            🖥 或在浏览器里直接体验
+          </a>
+        </p>
         <p className="mt-6 text-xs text-slate-400 dark:text-slate-500">
           Flowtide · 数据仅存于本地 (local-first) · 无第三方统计与广告
           <br />

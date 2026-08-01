@@ -134,14 +134,14 @@ export const projects: Project[] = [
     title: "MyBlogger",
     slug: "myblogger",
     description:
-      "基于 Next.js 15 + MDX 的个人博客系统，集全文搜索、评论、SEO、工具箱、构词法记单词于一体，已部署生产。",
+      "基于 Next.js 15 + MDX 的个人博客与项目作品集，集五子棋、周易六爻、车票生成、Hermes 同步、构词法记单词于一体，已部署生产。",
     techStack: ["Next.js", "TypeScript", "Tailwind CSS", "MDX", "Fuse.js", "Nginx", "PM2"],
     featured: true,
-    longDescription: `MyBlogger 是我用 Next.js 15 + MDX 构建的个人博客系统（本网站）。
+    longDescription: `MyBlogger 是我用 Next.js 15 + MDX 构建的个人博客与项目作品集（本网站）。
 
 采用 App Router 架构，所有页面使用服务端组件 (RSC)，博客列表页的搜索和过滤功能通过客户端组件实现。内容管理采用文件系统的 MDX 格式，无需数据库。
 
-除博客核心功能外，还集成了两个实用模块：**工具箱**（12306 车票生成器，输入电子发票信息生成蓝色纸质报销凭证样式 PDF，支持下载打印）和**构词法记单词**（通过词根/前缀/后缀分解记忆，涵盖 CET4/CET6 词汇，支持闪卡翻页和学习模式）。
+除博客核心功能外，还集成了多个实用模块：**五子棋**（人机 + 在线联机，Minimax AI + WebSocket）、**周易六爻排盘解卦**（铜钱摇卦 + AI 多方交叉验证）、**12306 车票生成器**（双样式车票 + AI 文本解析 + 浏览器直接打印）、**Hermes 图片同步**（Docker 容器图表一键拉取）、**构词法记单词**（词根分解 + SM-2 闪卡背诵），以及 **Flowtide 心流潮汐**独立介绍页。
 
 已部署至腾讯云轻量服务器，Nginx 反向代理 + Let's Encrypt SSL，PM2 进程守护。`,
     features: [
@@ -154,8 +154,12 @@ export const projects: Project[] = [
       "代码块语法高亮 (rehype-pretty-code + Shiki) + 一键复制",
       "Giscus 评论系统 (GitHub Discussions 驱动，主题自适应)",
       "SEO 优化 (sitemap.xml / robots.txt / OpenGraph 动态封面图)",
-      "构词法记单词系统：词根/前缀/后缀分解记忆 + 闪卡/学习模式，涵盖 CET4/CET6",
-      "工具箱模块：12306 车票生成器（电子发票信息生成蓝色纸质报销凭证样式 PDF）",
+      "构词法记单词系统：词根/前缀/后缀分解记忆 + SM-2 闪卡/背诵模式，涵盖 CET4/CET6",
+      "12306 车票生成器：双样式（蓝票/红票）+ AI 文本解析 + 浏览器直接打印，自动分页正反面",
+      "周易六爻排盘解卦：铜钱摇卦 + 自动排盘 + DeepSeek 四轮 AI 多方交叉验证",
+      "Hermes 图片同步：Docker 容器图表一键拉取 + 响应式预览网格",
+      "Flowtide 心流潮汐独立介绍页：产品展示 + 版本信息 + 下载入口",
+      "五子棋在线对战：WebSocket 房间对战 + AI 对弈 + 排行榜",
       "Nginx 反向代理 + Let's Encrypt SSL + gzip + 静态资源强缓存",
       "PM2 进程管理 (myblogger + ws-gomoku 双进程)",
       "响应式设计 (移动端优先) + 上一篇/下一篇导航",

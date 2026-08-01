@@ -4,10 +4,11 @@ import { projects } from "@/content/projects";
 export const metadata = {
   title: "项目",
   description:
-    "课堂 AI 领航员、五子棋 AI、机器人足球策略等全栈项目展示，涵盖 Python、Next.js、WebSocket 等技术。",
+    "Flowtide 心流潮汐、课堂 AI 领航员、五子棋 AI、机器人足球策略等全栈项目展示，涵盖 React、Python、Next.js、WebSocket 等技术。",
   keywords: [
     "项目",
     "全栈",
+    "Flowtide",
     "Python",
     "Next.js",
     "AI",
@@ -18,7 +19,7 @@ export const metadata = {
   openGraph: {
     title: "项目 | Merrain's Blog",
     description:
-      "课堂 AI 领航员、五子棋 AI、机器人足球策略等全栈项目展示，涵盖 Python、Next.js、WebSocket 等技术。",
+      "Flowtide 心流潮汐、课堂 AI 领航员、五子棋 AI、机器人足球策略等全栈项目展示，涵盖 React、Python、Next.js、WebSocket 等技术。",
     url: "https://merrain.cn/projects",
   },
 };

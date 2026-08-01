@@ -1,6 +1,6 @@
 # MyBlogger
 
-基于 Next.js 15 + MDX 的个人博客系统，集成五子棋在线对战、构词法记单词、周易六爻排盘解卦、车票生成器和 Hermes 图片同步工具。
+基于 Next.js 15 + MDX 的个人博客与项目作品集，集成五子棋在线对战、构词法记单词、周易六爻排盘解卦、车票生成器和 Hermes 图片同步工具，同时展示 Flowtide 心流潮汐、课堂 AI 领航员、Simuro 机器人足球等全栈项目。
 
 ## 功能特性
 
@@ -96,6 +96,7 @@ npm start          # 启动生产服务器
 │   │   │   ├── online/room/      # 在线房间对战页
 │   │   │   ├── play/             # AI 对战页
 │   │   │   └── leaderboard/      # 排行榜页
+│   │   ├── flowtide/             # Flowtide 心流潮汐介绍页
 │   │   ├── projects/             # 项目展示
 │   │   ├── tools/                # 工具箱（含周易六爻）
 │   │   ├── vocabulary/           # 词汇工具 (词根浏览 + 闪卡 + 背诵)

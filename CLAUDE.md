@@ -59,6 +59,7 @@ src/
 │   │   ├── tools/ticket/parse/     # 车票 AI 文本解析
 │   │   └── tools/yijing/         # 周易 API (密码验证 + AI 解卦 + 存档)
 │   ├── blog/[slug]/            # 文章详情 (MDX 渲染)
+│   ├── flowtide/               # Flowtide 心流潮汐介绍页
 │   ├── gomoku/                 # 五子棋 (在线 + AI + 排行榜)
 │   ├── projects/               # 项目展示
 │   ├── tags/                   # 标签聚合页

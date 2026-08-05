@@ -1,0 +1,98 @@
+---
+title: "Transformer 上限触顶，Mobius 能否引发下一代模型架构的革命？"
+date: "2026-08-05"
+category: "深度学习"
+tags: ["AI", "深度学习", "大模型"]
+summary: "前 OpenAI 推理负责人与前 Google Gemini 预训练负责人公开表态 Transformer 已走到尽头，上海人工智能实验室书生 Mobius 团队提出知识与推理分离的新架构，或在持续学习、组合泛化等方向突破现有上限。"
+---
+
+> 📌 本文整理自微信公众号「机器之心」发布的文章《Transformer 上限触顶，Mobius 能否引发下一代模型架构的革命？》，仅作内容搬运与梳理，**不代表本博客任何观点**。
+>
+> 原文链接：[https://mp.weixin.qq.com/s/1nnQ37Jyh9dZxNIbYeF66A](https://mp.weixin.qq.com/s/1nnQ37Jyh9dZxNIbYeF66A)
+>
+> 论文：[Intern-S2-Mobius: Foundation Model with Decoupled Knowledge and Reasoning](https://github.com/InternLM/Intern-S2-Mobius/blob/main/Technical_Report_Intern_S2_Mobius.pdf) | GitHub：[InternLM/Intern-S2-Mobius](https://github.com/InternLM/Intern-S2-Mobius) | Hugging Face：[internlm/Intern-S2-Mobius](https://huggingface.co/internlm/Intern-S2-Mobius)
+
+## 背景：Transformer 走到尽头了吗？
+
+Transformer 的上限在哪里？这个问题从 2022 年 ChatGPT 问世起，就开始被广泛讨论。最近一两个月，答案初见端倪——前 OpenAI 推理负责人 Jerry Tworek 与前 Google Gemini 预训练负责人 Rohan Anil 公开表态，**Transformer 已经走到尽头，并成为走向 AGI 的最大瓶颈**。
+
+国内头部基础大模型也在积极尝试改进版 Transformer 架构，但部分动机来自算力瓶颈（通过稀疏/线性注意力降低复杂度），并不完全是为了提升架构的能力上限。这些方案在资源受限的情况下成功实现了更大的参数规模，但半年后是否同样会碰壁，还需打个问号。
+
+在这样的背景下，来自**上海人工智能实验室的书生 Mobius 团队**提出了一条可能的路径——通过**知识与推理分离**，探索在持续学习、组合泛化等方向上能力上限更高的架构。
+
+## Transformer 的「三宗罪」
+
+随着 Transformer 模型越来越大、能力越来越强，其始终存在的三个根本问题却一直未得到有效解决：
+
+**（1）学过的，不能快速回想起来。** 从端到端推理效率中可见一斑。虽然超长思维链（CoT）配合强化学习（RL）可以让模型通过不断试错、验证和纠错来大幅提高答对复杂问题的概率，但这种极致的「啰唆」意味着极致的反应慢与算力浪费。模型并不是不会，而是需要低效的手段来激发内在潜力。
+
+**（2）新学的，想要记好，成本太高。** 这是 AI 领域存在已久的持续学习问题。Transformer 原生具备 Few-shot Learning 和 In-Context Learning 能力，通过 RAG 构造充分上下文即可提升答对率。然而人类的需求是无限的，Transformer 的注意力是有限的——随着知识增多，RAG 长上下文的低信息密度反而成为瓶颈。**高密度的记忆才能带来真正高效的持续学习**。而目前最有效的高密度记忆方式仍是大规模预训练：想加入新领域知识，最好将核心旧数据与部分新数据混合，把模型续训甚至重训一遍。成本不可接受，也违背了持续学习的初衷。
+
+**（3）没学的，难以通过联想构建。** 这是困扰 AI 领域更久的组合泛化问题——通过见过的知识，自动学会没见过的知识。目前 Transformer 能 Zero-shot 解决的问题，更多是流程性的、有明确逻辑链条的问题。在强调直觉与联想的领域（如科学发现），Transformer 产生重要泛化的例子屈指可数。
+
+> 爱因斯坦发现广义相对论，不仅因为他同时了解狭义相对论和黎曼几何这两条知识，还因为这两条知识在某一时刻**同时被激活**——俗称「灵感迸发」。Scaling 后的 Transformer 已足以让两条知识同时出现在一个模型中，但在单次推理中，如何提高不同知识同时被看见、同时被激活的概率，是增加组合泛化机会的关键。
+
+## 「三宗罪」的共同源泉
+
+上述三宗罪可以共同归因于一点——**分层的记忆与推理**。
+
+根据学术界对 Transformer 的主流理解：
+
+- **全连接层（FFN）负责记忆存储**
+- **注意力层（Attention）负责组合推理**
+
+不同层的 FFN 存储不同的知识，相同 Token 在不同层可以激活出不同的知识；不同层的 Attention 完成不同形式的组合。由于层间存在递归特性，当前层的 Attention 主要处理上一层 FFN 中取出的知识（层间 Residual Connection 的存在也让靠前层的知识能被部分处理）。
+
+这导致了三个后果：
+
+- 推理时若想完整回顾所有知识，需经过所有层。一旦错过关键知识，只能强行输出废话来争取时间，再重新回到第一层多取几次知识。
+- 知识在不同层的存储管理混乱，既有重叠又有耦合。学习新知识时模型无法判断该将其插入哪里，只能暴力更新所有知识。
+- 不同层之间的知识和推理主要通过 Residual Connection 这条狭窄通路连接。即使关键知识都被激活了，等它们「见面」时，靠前层的知识也已被稀释得差不多了。
+
+## Mobius 的方案：知识与推理分离
+
+Mobius 的核心思路非常直白：**将不同层中记忆与推理的耦合拆解开**，把每层的记忆全部取出，存储为一个**共享池**，让每一层的 Attention 都能访问所有知识。
+
+这带来的三个直接收益：
+
+**（1）推理效率提升。** 假设推理层数相同，共享记忆后的模型可以更多次地遍历所有知识，有更大的机会取出关键知识，也就更容易输出有用的话，不必靠长 CoT「啰唆」来激发。
+
+**（2）知识插入更灵活。** 所有知识扁平化存储后，新知识可以「一览无余」地找到自己的位置，更少担心牵一发而动全身。
+
+**（3）组合泛化增强。** 每次经过共享记忆库时，所有知识都有机会被同时激活，大大增加不同知识直接「见面」的机会。
+
+目前的实验结果已初步验证了这些优势：
+
+- Mobius 在**端到端推理效率较 Transformer 提升近 4 倍**的同时，下游任务准确率并未变差。
+- Mobius 可以用 **60% 的数据**达到与 Transformer 相近的 MMLU 分数，具备更好的数据压缩率。
+- 在一些知识组合泛化任务中，Mobius 相较 Transformer **提升了 2 倍**。
+
+> 从 RNN 到 Transformer，是将 Token 之间「Recurrent + Residual Connection 的组合」转换为 Full-Connection；从 Transformer 到 Mobius，是将知识之间「Recurrent + Residual Connection 的组合」转换为 Full-Connection。上一代改造大幅提升了基座模型的能力上限，这一次是否会产生相似效果，值得期待。
+
+## 站在学术热点视角看 Mobius
+
+近期学术界对 Residual Connection 和 Latent Reasoning 的改进讨论较多，而 Mobius 在这两个方向上恰好有天然契合。
+
+**原生的 Backward Residual Connection。** 无论是最早的 ResNet，还是近期的 Hyper-Connection、Attention-Residual，共性功能都是「在前向传播时将浅层信息传向深层」。这种单向传播存在一个问题：一旦关键知识被错过，或深层知识反而是浅层知识的读取前提，模型只能输出废话再循环一次。Mobius 将不同层知识存储到一起，在思想上可以视为引入了一种反向的 Residual Connection，让信息传递更加灵活。
+
+**更加动态的 Latent Reasoning。** 传统的 Latent Reasoning 要求模型每次循环都经过所有层，不论某些层的知识是否已不再必要。相比之下，Mobius 在每一层都有机会访问所有知识，且不限制必须激活哪些知识，每经过一层不仅相当于完成一次 Latent Reasoning，还能灵活选择激活内容，减少冗余计算。同时，Mobius 在每一层迭代的不只是一个 Token 的表征，具备更高的迭代效率。
+
+## 未来方向：递归自进化、科学发现与世界模型
+
+Mobius 知识与推理分离的设计，在以下三个前沿方向上展现出潜力：
+
+- **递归自进化**：无论迭代数据、参数还是架构，都需要一种高密度、高灵活性的记忆存储与拓展机制来支撑模型的可持续生长。Mobius 的共享记忆池天然适配这一需求。
+- **AI 辅助科学发现**：Coding 是流程性问题的完备解，但 Research 是流程、直觉与知识组合泛化的联合体。科学发现需要关键知识既同时存储在模型中，又能在某次推理中被同时激活——这正是 Mobius 组合泛化能力的用武之地。
+- **世界模型**：语言模型建模的是离散 Token，世界模型建模的是连续物理世界。相比语言模型，世界模型对连续可微的理解和推理方式有更迫切的需求，Mobius 原生支持的 Latent Reasoning 有机会在此提供帮助。
+
+## 挑战：存算分离带来的效率瓶颈
+
+现阶段的 Mobius 虽然带来了端到端推理速度的提升，但这主要源于其更高效的推理路径带来了更短的 CoT。在**单个 Token 的推理效率**上，Mobius 相比 Transformer 还有距离。
+
+这背后的根源在于：Mobius 算法层面的知识与推理分离，天然带来了硬件层面的**存算分离**特性，由此引发的**访存墙**和**通信墙**是阻碍 Mobius 进一步提高推理效率的关键。
+
+> Mobius 提供了更高的能力上限，但如何设计更适合它的存取策略、并行策略，甚至硬件架构，是决定 Mobius 能否达到自身能力上限的关键。
+
+---
+
+*本文内容整理自机器之心公众号文章，仅供学习参考。对 Mobius 架构的深入理解请参阅[原论文](https://github.com/InternLM/Intern-S2-Mobius/blob/main/Technical_Report_Intern_S2_Mobius.pdf)。*

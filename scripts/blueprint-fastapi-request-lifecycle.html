@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>一次请求的完整生命周期 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --client:#DCD7CB;
+  --base:#DBEAFE;   --base-d:#2563EB;
+  --core:#FEF3C7;   --core-d:#B45309;
+  --data:#DCFCE7;   --data-d:#059669;
+  --mine:#F3E8FF;   --mine-d:#7C3AED;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:960px;margin:0 auto;padding:32px 38px 34px;
+}
+.cover-head{text-align:center;margin-bottom:14px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--core-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+/* 时序图：7 列对齐，每行按列位横跨 */
+.seq{display:grid;grid-template-columns:repeat(7,1fr);column-gap:0;row-gap:5px;align-items:end}
+
+.hdr{
+  position:relative;text-align:center;font-size:11.5px;font-weight:700;
+  padding:5px 4px;border-radius:6px;box-shadow:1.8px 1.8px 0 #333;margin:0 3px;
+}
+.hdr::after{content:"";position:absolute;inset:-1px;border:1.4px solid #333;
+  border-radius:6px 9px 6px 8px;filter:url(#wobble);pointer-events:none}
+.h-client{background:var(--client)} .h-base{background:var(--base)}
+.h-core{background:var(--core)}     .h-data{background:var(--data)}
+.h-mine{background:var(--mine)}
+
+/* 生命线 */
+.lifeline{grid-row:2 / span 9;justify-self:center;width:0;height:100%;
+  border-left:1.6px solid #b9b4a8;margin-top:4px}
+
+/* 消息行 */
+.step{position:relative;padding-top:13px;margin:0 3px}
+.step .line{position:absolute;top:6px;left:0;right:0;height:0}
+.step .line::before{content:"";position:absolute;inset:0 0 auto 0;border-top:1.7px solid #333}
+.step .line.to-left::before{border-top-color:#2563EB}
+/* 允许换行：跨列宽度放不下时裁掉会丢信息（POST /v1/chat/comple… 这种） */
+.step .txt{font-size:11px;color:#333;word-break:break-word}
+.step .txt b{color:#111}
+.step .txt code{font-family:Consolas,monospace;font-size:10.5px;background:#ffffffd0;
+  border:1.1px solid #333;border-radius:3px;padding:0 3px;white-space:nowrap}
+
+/* 返回消息用虚线 */
+.step.ret .line::before{border-top:1.7px dashed #666}
+
+/* 线端箭头 */
+.step .line span{position:absolute;top:-4px;width:0;height:0;
+  border-top:4px solid transparent;border-bottom:4px solid transparent}
+.step .line .r{border-left:6px solid #333}
+.step .line .l{border-right:6px solid #333}
+
+/* 激活点 */
+.step .dot{position:absolute;top:3px;left:50%;width:7px;height:7px;border-radius:50%;
+  background:#4b5563;transform:translateX(-50%)}
+
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 20px;margin-top:16px}
+.legend span{display:flex;align-items:center;gap:6px;font-size:11px;color:#444}
+.swatch{width:13px;height:13px;border:1.4px solid #333;border-radius:4px;display:inline-block}
+.ln-s{width:26px;height:0;border-top:2px solid #333;display:inline-block}
+.ln-d{width:26px;height:0;border-top:2px dashed #666;display:inline-block}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>一次请求的完整生命周期 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">who talks to whom, and in what order</div>
+</div>
+
+<div class="seq">
+  <div class="hdr h-client">客户端</div>
+  <div class="hdr h-base">Uvicorn</div>
+  <div class="hdr h-base">中间件链</div>
+  <div class="hdr h-core">FastAPI</div>
+  <div class="hdr h-data">依赖注入</div>
+  <div class="hdr h-data">Pydantic</div>
+  <div class="hdr h-mine">路由函数</div>
+
+  <div class="lifeline" style="grid-column:1"></div>
+  <div class="lifeline" style="grid-column:2"></div>
+  <div class="lifeline" style="grid-column:3"></div>
+  <div class="lifeline" style="grid-column:4"></div>
+  <div class="lifeline" style="grid-column:5"></div>
+  <div class="lifeline" style="grid-column:6"></div>
+  <div class="lifeline" style="grid-column:7"></div>
+
+  <div class="step" style="grid-column:1 / 3">
+    <span class="dot"></span>
+    <div class="line"><span class="r" style="right:0"></span></div>
+    <div class="txt">① <b>客户端 → Uvicorn</b> · <code>POST /v1/chat/completions</code></div>
+  </div>
+
+  <div class="step" style="grid-column:2 / 4">
+    <span class="dot"></span>
+    <div class="line"><span class="r" style="right:0"></span></div>
+    <div class="txt">② <b>Uvicorn → 中间件链</b> · 构造 ASGI scope</div>
+  </div>
+
+  <div class="step" style="grid-column:3 / 5">
+    <span class="dot"></span>
+    <div class="line"><span class="r" style="right:0"></span></div>
+    <div class="txt">③ <b>中间件链 → FastAPI</b> · 逐层向内传递</div>
+  </div>
+
+  <div class="step" style="grid-column:4 / 6">
+    <span class="dot"></span>
+    <div class="line"><span class="r" style="right:0"></span></div>
+    <div class="txt">④ <b>FastAPI → 依赖注入</b> · 解析依赖 <code>user_api_key_auth</code></div>
+  </div>
+
+  <div class="step ret" style="grid-column:4 / 6">
+    <span class="dot"></span>
+    <div class="line to-left"><span class="l" style="left:0"></span></div>
+    <div class="txt">⑤ <b>依赖注入 → FastAPI</b> · 返回 <code>UserAPIKeyAuth</code></div>
+  </div>
+
+  <div class="step" style="grid-column:4 / 7">
+    <span class="dot"></span>
+    <div class="line"><span class="r" style="right:0"></span></div>
+    <div class="txt">⑥ <b>FastAPI → Pydantic</b> · 校验请求体</div>
+  </div>
+
+  <div class="step ret" style="grid-column:4 / 7">
+    <span class="dot"></span>
+    <div class="line to-left"><span class="l" style="left:0"></span></div>
+    <div class="txt">⑦ <b>Pydantic → FastAPI</b> · 得到 <code>ChatCompletionRequest</code></div>
+  </div>
+
+  <div class="step" style="grid-column:4 / 8">
+    <span class="dot"></span>
+    <div class="line"><span class="r" style="right:0"></span></div>
+    <div class="txt">⑧ <b>FastAPI → 路由函数</b> · 调用路由函数</div>
+  </div>
+
+  <div class="step ret" style="grid-column:1 / 8">
+    <span class="dot"></span>
+    <div class="line to-left"><span class="l" style="left:0"></span></div>
+    <div class="txt">⑨ <b>路由函数 → 客户端</b> · <code>StreamingResponse</code> —— 响应一路流回去</div>
+  </div>
+</div>
+
+<div class="legend">
+  <span><i class="ln-s"></i>请求 / 调用向内</span>
+  <span><i class="ln-d"></i>返回 / 响应向外</span>
+  <span><i class="swatch" style="background:var(--client)"></i>外部</span>
+  <span><i class="swatch" style="background:var(--base)"></i>服务器 / 中间件</span>
+  <span><i class="swatch" style="background:var(--core)"></i>FastAPI</span>
+  <span><i class="swatch" style="background:var(--data)"></i>依赖注入 / 校验</span>
+  <span><i class="swatch" style="background:var(--mine)"></i>路由函数</span>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">横轴是谁在说话，纵轴是说话的先后 —— ⑤ ⑦ ⑨ 三条虚线都是往回走的</span>
+</div>
+</body>
+</html>

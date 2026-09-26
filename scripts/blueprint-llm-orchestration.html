@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>大模型作为调度中心 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --core:#DBEAFE;  --core-d:#2563EB;
+  --search:#DCFCE7;--search-d:#059669;
+  --calc:#FFEDD5;  --calc-d:#EA580C;
+  --db:#FBE5D6;    --db-d:#BE185D;
+  --api:#F3E8FF;   --api-d:#7C3AED;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:1000px;margin:0 auto;padding:32px 38px 34px;
+}
+.cover-head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--core-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+/* 中心 + 四角 */
+.hub{display:flex;align-items:stretch;gap:14px}
+
+.side{
+  flex:0 0 30px;display:flex;align-items:center;justify-content:center;
+  font-size:11px;letter-spacing:1px;writing-mode:vertical-rl;
+}
+.side.left{color:var(--core-d);border-left:2.5px solid var(--core-d);padding-left:5px}
+.side.right{color:var(--search-d);border-right:2.5px solid var(--search-d);padding-right:5px}
+
+.canvas{position:relative;flex:1 1 auto;min-width:0}
+.conn{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+
+.grid{position:relative;display:grid;grid-template-columns:1fr 1.25fr 1fr;
+  grid-template-rows:auto auto auto;gap:16px;align-items:center}
+
+.box{
+  position:relative;border-radius:9px;padding:10px 13px;background:#fff;
+  box-shadow:2.5px 2.5px 0 #333;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.7px solid #333;
+  border-radius:9px 13px 9px 12px;filter:url(#wobble);pointer-events:none}
+.box .t{font-size:13px;font-weight:700}
+.box .d{font-size:10.5px;color:#555;margin-top:2px}
+.badge{display:inline-block;width:17px;height:17px;line-height:16px;text-align:center;
+  border-radius:5px;border:1.4px solid #333;font-size:10.5px;margin-right:4px;
+  font-weight:400;background:#ffffffcc}
+
+.core{
+  grid-column:2;grid-row:2;text-align:center;padding:18px 14px;background:var(--core);
+}
+.core .t{font-family:"ZCOOL KuaiLe",sans-serif;font-size:20px;font-weight:400}
+.core .d{font-size:11.5px;color:#1e40af;margin-top:3px}
+.core .e{font-size:10.5px;color:#3b5bdb;margin-top:5px;letter-spacing:.3px}
+
+.tl{grid-column:1;grid-row:1;background:var(--search)}
+.tr{grid-column:3;grid-row:1;background:var(--calc)}
+.bl{grid-column:1;grid-row:3;background:var(--db)}
+.br{grid-column:3;grid-row:3;background:var(--api)}
+
+.footnote{
+  margin-top:14px;display:flex;justify-content:center;gap:26px;
+  font-size:11px;color:#666;
+}
+.footnote span{position:relative;padding-left:14px}
+.footnote span::before{content:"";position:absolute;left:0;top:6px;width:8px;height:0;
+  border-top:1.6px solid #aaa}
+.footnote b{color:#444}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>大模型作为调度中心 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">a brain in the middle, four hands around it</div>
+</div>
+
+<div class="hub">
+  <div class="side left">Scaling Laws 保障</div>
+
+  <div class="canvas">
+    <svg class="conn" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <line x1="50" y1="50" x2="17" y2="17" stroke="#a8a29a" stroke-width="0.5" stroke-dasharray="2.5 2"/>
+      <line x1="50" y1="50" x2="83" y2="17" stroke="#a8a29a" stroke-width="0.5" stroke-dasharray="2.5 2"/>
+      <line x1="50" y1="50" x2="17" y2="83" stroke="#a8a29a" stroke-width="0.5" stroke-dasharray="2.5 2"/>
+      <line x1="50" y1="50" x2="83" y2="83" stroke="#a8a29a" stroke-width="0.5" stroke-dasharray="2.5 2"/>
+    </svg>
+
+    <div class="grid">
+      <div class="box tl">
+        <div class="t"><span class="badge">搜</span>搜索工具</div>
+        <div class="d">Web Search · 知识库检索</div>
+      </div>
+
+      <div class="box tr">
+        <div class="t"><span class="badge">算</span>计算工具</div>
+        <div class="d">代码执行 · 数学运算</div>
+      </div>
+
+      <div class="box core">
+        <div class="t">大模型</div>
+        <div class="d">调度中心 / Agent 大脑</div>
+        <div class="e">理解意图 · 规划步骤 · 编排工具</div>
+      </div>
+
+      <div class="box bl">
+        <div class="t"><span class="badge">库</span>数据库工具</div>
+        <div class="d">SQL · 向量检索</div>
+      </div>
+
+      <div class="box br">
+        <div class="t"><span class="badge">连</span>第三方 API</div>
+        <div class="d">天气 · 邮件 · 支付</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="side right">Function Calling 扩展</div>
+</div>
+
+<div class="footnote">
+  <span><b>内部推理能力</b> —— 靠 Scaling Laws 长出来的那部分</span>
+  <span><b>外部能力边界</b> —— 靠 Function Calling 伸出去的那部分</span>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">模型自己不会查天气，但它知道该调用谁 —— 这就是调度</span>
+</div>
+</body>
+</html>

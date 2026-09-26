@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>中间件栈的执行顺序 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --m1:#F3E8FF; --m2:#DBEAFE; --m3:#DCFCE7; --m4:#FEF3C7; --m5:#FBE5D6;
+  --req:#333; --resp:#059669;
+  --end:#EFEDE6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:960px;margin:0 auto;padding:32px 40px 34px;
+}
+.cover-head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--resp)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+.grid{display:grid;grid-template-columns:52px 1fr 52px;align-items:stretch;row-gap:0}
+
+.box{
+  position:relative;border-radius:8px;padding:8px 14px;
+  display:flex;align-items:baseline;gap:12px;box-shadow:2px 2px 0 #333;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.box .name{font-weight:700;font-size:12.5px;flex:1 1 auto;word-break:break-word}
+.box .note{font-size:11px;color:#444;flex:0 0 auto}
+
+.m1{background:var(--m1)} .m2{background:var(--m2)} .m3{background:var(--m3)}
+.m4{background:var(--m4)} .m5{background:var(--m5)}
+.entry,.exit{background:var(--end);text-align:center;font-weight:700;font-size:12.5px}
+
+.stack{display:flex;flex-direction:column;gap:6px;padding:6px 0}
+.entry,.exit{margin:6px 0}
+
+/* 两侧竖直箭头 */
+.side{display:flex;flex-direction:column;align-items:center;position:relative}
+.side .cap{font-size:10.5px;color:#555;white-space:nowrap;margin-bottom:2px}
+.down,.up{flex:1 1 auto;width:0;position:relative;margin:2px 0}
+.down{border-left:2.2px solid var(--req)}
+.down::after{content:"";position:absolute;bottom:-2px;left:-6px;
+  border-left:6px solid transparent;border-right:6px solid transparent;
+  border-top:9px solid var(--req)}
+.up{border-left:2.2px solid var(--resp)}
+.up::before{content:"";position:absolute;top:-2px;left:-6px;
+  border-left:6px solid transparent;border-right:6px solid transparent;
+  border-bottom:9px solid var(--resp)}
+
+/* 栈内的竖向贯穿箭头（请求穿过每一层） */
+.pierce{
+  display:flex;justify-content:center;font-size:13px;color:#999;line-height:1;
+}
+
+.rule{
+  margin-top:16px;position:relative;background:#fff;border-radius:8px;
+  padding:10px 14px;box-shadow:2px 2px 0 #333;
+}
+.rule::after{content:"";position:absolute;inset:-1px;border:1.5px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.rule .h{font-size:12.5px;font-weight:700;margin-bottom:3px}
+.rule .t{font-size:11.5px;color:#3f3f3f}
+.rule .t b{color:#111}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>中间件栈的执行顺序 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">added first, runs last</div>
+</div>
+
+<div class="grid">
+  <div></div>
+  <div class="box entry">请求进入</div>
+  <div></div>
+
+  <div class="side"><div class="cap">请求</div><div class="down"></div></div>
+
+  <div class="stack">
+    <div class="box m1"><span class="name">SecurityHeadersMiddleware</span><span class="note">最后 add → 最外层</span></div>
+    <div class="box m2"><span class="name">InFlightRequestsMiddleware</span><span class="note">追踪在途请求</span></div>
+    <div class="box m3"><span class="name">BillableRequestMetricsMiddleware</span><span class="note">计量计费统计</span></div>
+    <div class="box m4"><span class="name">PrometheusAuthMiddleware</span><span class="note">指标端点鉴权</span></div>
+    <div class="box m5"><span class="name">CORSMiddleware</span><span class="note">最先 add → 最内层</span></div>
+  </div>
+
+  <div class="side"><div class="cap">响应</div><div class="up"></div></div>
+
+  <div></div>
+  <div class="box exit">路由与应用</div>
+  <div></div>
+</div>
+
+<div class="rule">
+  <div class="h">顺序规则：add 的先后与执行的先后相反</div>
+  <div class="t"><b>最后 add 的排在最外层</b>，<b>最先 add 的排在最内层</b>。
+    所以请求自上而下穿过时，先遇到最后注册的那个；响应返回时顺序正好反过来 —— 内层先返回，外层后返回。</div>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">左边下去、右边上来 —— 同一条链，两个方向走的顺序恰好相反</span>
+</div>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FastAPI 的请求分层 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  /* 外部客户端用暖灰：浅橙系(#FFEDD5)和米白底的亮度差只有 9，小尺寸下几乎看不见；
+     而且它本就不该和框架层抢视觉重点 */
+  --client:#DCD7CB; --client-d:#57534E;
+  --base:#DBEAFE;   --base-d:#2563EB;
+  --core:#FEF3C7;   --core-d:#B45309;
+  --data:#DCFCE7;   --data-d:#059669;
+  --mine:#F3E8FF;   --mine-d:#7C3AED;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:900px;margin:0 auto;padding:32px 40px 34px;
+}
+.cover-head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--core-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+.stack{display:flex;flex-direction:column;align-items:center}
+
+.box{
+  position:relative;width:100%;border-radius:8px;padding:8px 16px;
+  display:flex;align-items:baseline;gap:14px;box-shadow:2px 2px 0 #333;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.box .name{font-weight:700;font-size:14px;flex:0 0 auto;min-width:150px}
+.box .desc{font-size:11.5px;color:#4a4a4a;flex:1 1 auto;text-align:right}
+.box .desc code{font-family:Consolas,monospace;font-size:11px;background:#ffffffcf;
+  border:1.2px solid #333;border-radius:4px;padding:0 4px}
+
+.client{background:var(--client)} .base{background:var(--base)}
+.core{background:var(--core)}     .data{background:var(--data)}
+.mine{background:var(--mine)}
+
+.ar{font-size:16px;color:#333;line-height:1;margin:3px 0}
+
+/* 响应说明 */
+.resp{
+  margin-top:14px;display:flex;align-items:center;justify-content:center;gap:10px;
+  font-size:11.5px;color:#555;
+}
+.resp .ln{flex:0 0 34px;height:0;border-top:2px dashed #999}
+
+/* 图例 */
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 16px;margin-top:14px}
+.legend span{display:flex;align-items:center;gap:5px;font-size:11px;color:#444}
+.swatch{width:13px;height:13px;border:1.4px solid #333;border-radius:4px;display:inline-block}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>FastAPI 的请求分层 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">six layers between the socket and your code</div>
+</div>
+
+<div class="stack">
+  <div class="box client">
+    <span class="name">浏览器 / 客户端</span>
+    <span class="desc">发出 HTTP 请求</span>
+  </div>
+  <span class="ar">↓</span>
+
+  <div class="box base">
+    <span class="name">Uvicorn</span>
+    <span class="desc">ASGI 服务器 · 驱动事件循环</span>
+  </div>
+  <span class="ar">↓</span>
+
+  <div class="box base">
+    <span class="name">Starlette</span>
+    <span class="desc">路由匹配 · 中间件链 · WebSocket</span>
+  </div>
+  <span class="ar">↓</span>
+
+  <div class="box core">
+    <span class="name">FastAPI</span>
+    <span class="desc">依赖注入 · 参数解析 · OpenAPI 生成</span>
+  </div>
+  <span class="ar">↓</span>
+
+  <div class="box data">
+    <span class="name">Pydantic</span>
+    <span class="desc">请求体校验 · 响应序列化</span>
+  </div>
+  <span class="ar">↓</span>
+
+  <div class="box mine">
+    <span class="name">路由函数</span>
+    <span class="desc">你的业务代码</span>
+  </div>
+</div>
+
+<div class="resp">
+  <span class="ln"></span>
+  请求自上而下逐层深入；响应沿原路逐层返回
+  <span class="ln"></span>
+</div>
+
+<div class="legend">
+  <span><i class="swatch" style="background:var(--client)"></i>外部客户端</span>
+  <span><i class="swatch" style="background:var(--base)"></i>服务器 / 框架底座</span>
+  <span><i class="swatch" style="background:var(--core)"></i>FastAPI 核心</span>
+  <span><i class="swatch" style="background:var(--data)"></i>数据校验</span>
+  <span><i class="swatch" style="background:var(--mine)"></i>你的代码</span>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">从 socket 到你的函数，请求要穿过六层 —— 每层只负责一件事</span>
+</div>
+</body>
+</html>

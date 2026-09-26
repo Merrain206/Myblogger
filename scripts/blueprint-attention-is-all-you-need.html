@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Attention Is All You Need · 一张图看懂</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --yellow:#FEF3C7; --blue:#DBEAFE; --green:#DCFCE7; --purple:#F3E8FF; --orange:#FFEDD5;
+  --yellow-d:#B45309; --blue-d:#2563EB; --green-d:#059669; --purple-d:#7C3AED; --orange-d:#EA580C;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.65;
+  background:var(--paper);max-width:880px;margin:0 auto;padding:34px 42px 38px;
+}
+.cover-head{text-align:center;margin-bottom:6px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:33px;font-weight:400;letter-spacing:1.2px;line-height:1.25}
+h1 .dot{color:var(--blue-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:25px;color:var(--ink2);margin-top:1px}
+.meta{
+  display:inline-block;margin-top:9px;padding:4px 16px;
+  border:1.5px solid #333;border-radius:999px;background:#fff;
+  font-size:12.5px;color:#4a4a4a;position:relative;
+}
+.meta::after{content:"";position:absolute;inset:-1px;border:1.5px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+
+/* 章节条 */
+.bar{
+  display:flex;align-items:baseline;gap:10px;margin:14px 0 7px;
+}
+.bar .no{font-family:"Caveat",cursive;font-size:23px;color:var(--ink2);line-height:1}
+.bar .zh{font-family:"ZCOOL KuaiLe",sans-serif;font-size:17px}
+.bar .en{font-family:"Caveat",cursive;font-size:16px;color:var(--ink2)}
+
+.card{
+  position:relative;background:#fff;border-radius:9px;padding:11px 15px;
+  box-shadow:2.5px 2.5px 0 #333;
+}
+.card::after{content:"";position:absolute;inset:-1px;
+  border:1.8px solid #333;border-radius:9px 13px 8px 12px;
+  filter:url(#wobble);pointer-events:none}
+.o{background:var(--orange)} .b{background:var(--blue)}
+.y{background:var(--yellow)} .g{background:var(--green)} .p{background:var(--purple)}
+
+/* 三/多列小卡 */
+.cols{display:flex;gap:11px}
+.cols>div{flex:1 1 0;position:relative;background:#fff;border-radius:8px;
+  padding:9px 11px;box-shadow:2px 2px 0 #333}
+.cols>div::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.cols .h{font-size:13px;font-weight:700;margin-bottom:2px}
+.cols .t{font-size:12px;color:#3f3f3f;line-height:1.55}
+
+ul{list-style:none}
+li{position:relative;padding-left:15px;font-size:12.5px;margin-bottom:3px;color:#333}
+li:last-child{margin-bottom:0}
+li::before{content:"";position:absolute;left:2px;top:8px;
+  width:5px;height:5px;border-radius:50%;background:#333}
+li b{color:#111}
+
+p{font-size:12.5px}
+code{font-family:Consolas,"DejaVu Sans Mono",monospace;font-size:11.8px;
+  background:#ffffffcc;border:1.3px solid #333;border-radius:5px;padding:0 6px;
+  white-space:nowrap}
+
+/* 结果数字 */
+.stats{display:flex;gap:11px;align-items:stretch}
+.stats .n{flex:1 1 0;text-align:center;background:#ffffffb8;border:1.6px solid #333;
+  border-radius:8px;padding:8px 4px;box-shadow:2px 2px 0 #333;position:relative}
+.stats .n::after{content:"";position:absolute;inset:-1px;border:1.5px solid #333;
+  border-radius:8px;filter:url(#wobble);pointer-events:none}
+.stats .v{font-family:"ZCOOL KuaiLe",sans-serif;font-size:23px;line-height:1.15;color:#1a1a1a}
+.stats .k{font-size:11px;color:#555}
+
+.arrow{display:block;margin:3px auto;width:24px;height:24px}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:13px;
+  padding:11px 24px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:21px;color:var(--yellow-d)}
+.capsule .big{font-family:"ZCOOL KuaiLe",sans-serif;font-size:16px}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>Attention Is All You Need <span class="dot">·</span> 一张图看懂</h1>
+  <div class="sub-en">a blueprint of the paper that deleted the loop</div>
+  <div class="meta">arXiv:1706.03762 · 2017 年 6 月 · 八位 Google 研究者</div>
+</div>
+
+<div class="bar"><span class="no">01</span><span class="zh">旧世界的三个死结</span><span class="en">why RNN had to go</span></div>
+<div class="cols">
+  <div class="o"><div class="h">串行</div><div class="t">第 t 步必须等第 t-1 步算完。序列多长，就有多少不可并行的环节。</div></div>
+  <div class="o"><div class="h">长距离衰减</div><div class="t">第 1 个词的信息要挤过中间 99 次状态更新的瓶颈管道。</div></div>
+  <div class="o"><div class="h">路径太长</div><div class="t">相距 n 的两个词，信号要经过 O(n) 步才能建立联系。</div></div>
+</div>
+
+<svg class="arrow" viewBox="0 0 24 24" fill="none">
+  <path d="M12 4 V18 M6 13 L12 19 L18 13" stroke="#333" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+
+<div class="bar"><span class="no">02</span><span class="zh">破局：把循环整个删掉</span><span class="en">the radical answer</span></div>
+<div class="card b">
+  <ul>
+    <li>只保留<b>注意力机制</b>，让序列中任意两个位置<b>直接对话</b>，中间不过任何中转站</li>
+    <li>两词之间的信号路径从 <code>O(n)</code> 一步降到 <code>O(1)</code> —— 这是并行性和梯度传播同时被解锁的关键</li>
+  </ul>
+</div>
+
+<svg class="arrow" viewBox="0 0 24 24" fill="none">
+  <path d="M12 4 V18 M6 13 L12 19 L18 13" stroke="#333" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+
+<div class="bar"><span class="no">03</span><span class="zh">两个核心零件</span><span class="en">attention, twice over</span></div>
+<div class="cols">
+  <div class="y"><div class="h">Scaled Dot-Product Attention</div>
+    <div class="t"><code>softmax(QK^T / √d_k) · V</code><br>除以 √d_k 是为了不让点积随维度增长而把 softmax 推进饱和区。</div></div>
+  <div class="y"><div class="h">Multi-Head</div>
+    <div class="t">把表示切成多组子空间并行做注意力，再拼接。<br>一个视角不够用 —— 有的头盯指代，有的头盯句法。</div></div>
+</div>
+
+<svg class="arrow" viewBox="0 0 24 24" fill="none">
+  <path d="M12 4 V18 M6 13 L12 19 L18 13" stroke="#333" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+
+<div class="bar"><span class="no">04</span><span class="zh">完整骨架</span><span class="en">encoder-decoder</span></div>
+<div class="card g">
+  <ul>
+    <li><b>Encoder ×6 / Decoder ×6</b>，每层都是 <code>Attention → Add &amp; Norm → FFN → Add &amp; Norm</code></li>
+    <li><b>位置编码</b>：注意力天生不认顺序，所以要用正弦函数把位置信息加进输入</li>
+    <li>Decoder 里多一层 <b>Mask</b>：让它别偷看未来的词</li>
+  </ul>
+</div>
+
+<svg class="arrow" viewBox="0 0 24 24" fill="none">
+  <path d="M12 4 V18 M6 13 L12 19 L18 13" stroke="#333" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+
+<div class="bar"><span class="no">05</span><span class="zh">结果</span><span class="en">what it brought</span></div>
+<div class="card p">
+  <div class="stats">
+    <div class="n"><div class="v">28.4</div><div class="k">WMT14 英德 BLEU（big）<br>比此前最好高 2+</div></div>
+    <div class="n"><div class="v">41.8</div><div class="k">WMT14 英法 BLEU<br>登顶</div></div>
+    <div class="n"><div class="v">3.5 天</div><div class="k">8 块 P100<br>训练成本只有 SOTA 一小部分</div></div>
+  </div>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="big">赢的不是算术，是并行性和梯度传播</span>
+  <span class="txt">删掉循环，反而成了几乎所有 AI 系统共同的地基</span>
+</div>
+</body>
+</html>

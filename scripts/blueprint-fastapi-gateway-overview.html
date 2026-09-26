@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>litellm 的位置 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --app:#DBEAFE;  --app-d:#2563EB;
+  --gw:#FEF3C7;   --gw-d:#B45309;
+  --prov:#DCFCE7; --prov-d:#059669;
+  --store:#FFEDD5;--store-d:#EA580C;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:940px;margin:0 auto;padding:32px 40px 34px;
+}
+.cover-head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--gw-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+.box{
+  position:relative;border-radius:8px;padding:9px 12px;text-align:center;
+  font-size:13px;font-weight:600;background:#fff;box-shadow:2px 2px 0 #333;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.box .dim{display:block;font-size:10.5px;font-weight:400;color:#555;margin-top:2px}
+.box code{font-family:Consolas,monospace;font-size:11px;font-weight:400}
+.app{background:var(--app)} .gw{background:var(--gw)}
+.prov{background:var(--prov)} .store{background:var(--store)}
+
+/* 主区：三列 */
+.row{display:flex;align-items:center;gap:12px}
+.col{display:flex;flex-direction:column;gap:7px}
+.c-app{flex:0 0 172px}
+.c-mid{flex:1 1 auto;min-width:0}
+.c-prov{flex:0 0 196px}
+.ar{font-size:19px;color:#333;flex:0 0 auto;align-self:center}
+
+/* 存储区：虚线框 = 控制面 */
+.storebox{
+  margin-top:9px;position:relative;border:1.6px dashed #333;border-radius:9px;
+  padding:11px 10px 10px;
+}
+.storebox .tag{
+  position:absolute;top:-9px;left:12px;background:var(--paper);padding:0 7px;
+  font-family:"Caveat",cursive;font-size:15px;color:var(--store-d);
+}
+.stores{display:flex;gap:8px}
+.stores .box{flex:1 1 0;min-width:0}
+
+/* 图例 */
+.legend{display:flex;justify-content:center;gap:22px;margin-top:16px;font-size:11.5px;color:#444}
+.legend span{display:flex;align-items:center;gap:6px}
+.solid{width:26px;height:0;border-top:2px solid #333;display:inline-block;position:relative}
+.solid::after{content:"";position:absolute;right:-1px;top:-3.5px;
+  border-left:6px solid #333;border-top:4px solid transparent;border-bottom:4px solid transparent}
+.dashed{width:26px;height:0;border-top:2px dashed #333;display:inline-block}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>litellm 站在哪里 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">one proxy in front of every provider</div>
+</div>
+
+<div class="row">
+  <div class="col c-app">
+    <div class="box app">你的应用<span class="dim">OpenAI SDK / LangChain</span></div>
+  </div>
+
+  <div class="ar">→</div>
+
+  <div class="col c-mid">
+    <div class="box gw">litellm Proxy<span class="dim"><code>:4000</code></span></div>
+    <div class="storebox">
+      <span class="tag">状态 / 控制面（虚线）</span>
+      <div class="stores">
+        <div class="box store">Postgres<span class="dim">密钥 · 用量 · 预算</span></div>
+        <div class="box store">Redis<span class="dim">限流 · 缓存</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ar">→</div>
+
+  <div class="col c-prov">
+    <div class="box prov">OpenAI</div>
+    <div class="box prov">Anthropic</div>
+    <div class="box prov">DeepSeek</div>
+    <div class="box prov">100+ 其他供应商</div>
+  </div>
+</div>
+
+<div class="legend">
+  <span><i class="solid"></i>模型调用流量</span>
+  <span><i class="dashed"></i>状态与控制面</span>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">100 个供应商的 key 集中在网关托管，应用侧只拿一把虚拟 key</span>
+</div>
+</body>
+</html>

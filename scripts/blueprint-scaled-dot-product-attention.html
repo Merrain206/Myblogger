@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Scaled Dot-Product Attention · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --q:#F3E8FF;  --q-d:#7C3AED;      /* Q 相关 */
+  --k:#DCFCE7;  --k-d:#059669;      /* K 相关 */
+  --v:#E0F2FE;  --v-d:#0284C7;      /* V 相关 */
+  --scale:#FBE5D6; --scale-d:#C2410C;/* 缩放 */
+  --mask:#EFEDE6;  --mask-d:#6B7280; /* Mask */
+  --note:#C0392B;                    /* 红色注释 */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:940px;margin:0 auto;padding:32px 40px 34px;
+}
+.cover-head{text-align:center;margin-bottom:14px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--q-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+.sec{font-family:"ZCOOL KuaiLe",sans-serif;font-size:15px;margin:16px 0 7px;
+  padding-left:11px;border-left:4px solid #333}
+.sec .en{font-family:"Caveat",cursive;font-size:15px;color:var(--ink2);margin-left:7px}
+
+/* 通用方块 */
+.box{
+  position:relative;border-radius:8px;padding:8px 10px;text-align:center;
+  font-size:12.5px;font-weight:600;background:#fff;box-shadow:2px 2px 0 #333;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.box .dim{display:block;font-size:10.5px;font-weight:400;color:#666;margin-top:2px}
+.box code{display:block;font-family:Consolas,monospace;font-size:11.5px;
+  font-weight:400;background:#ffffffd0;border:1.2px solid #333;border-radius:4px;
+  padding:1px 5px;margin:3px auto 0;width:fit-content}
+.q{background:var(--q)} .kk{background:var(--k)} .vv{background:var(--v)}
+.s{background:var(--scale)} .m{background:var(--mask)}
+
+/* 箭头 */
+.ar{font-size:17px;color:#333;flex:0 0 auto;align-self:center}
+
+/* 投影区 */
+.proj{display:flex;align-items:center;gap:4px}
+.proj .stack3{display:flex;flex-direction:column;gap:7px;flex:1 1 auto}
+/* 每路各画一条箭头 —— 只在中间画一条会被读成「X 只投影出了 K」 */
+.prow{display:flex;align-items:center;gap:5px}
+.prow .box{flex:1 1 auto;min-width:0}
+
+/* 主计算链 */
+.chain{display:flex;gap:7px;align-items:stretch}
+.chain .box{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center}
+.chain .ar{align-self:center}
+
+/* 红色注释 */
+.note{display:block;font-size:10px;font-weight:400;color:var(--note);
+  margin-top:3px;line-height:1.35}
+
+/* 公式条 */
+.formula{
+  margin-top:14px;position:relative;background:#fff;border-radius:8px;
+  padding:11px 16px;text-align:center;box-shadow:2px 2px 0 #333;
+}
+.formula::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.formula .lbl{font-family:"Caveat",cursive;font-size:18px;color:#5b21b6;margin-right:10px}
+.formula code{font-family:Consolas,monospace;font-size:13.5px;color:#3b0764}
+
+/* 说明卡 */
+.notes{display:flex;gap:12px;margin-top:12px}
+.notes>div{flex:1 1 0;position:relative;background:#fff;border-radius:8px;
+  padding:9px 12px;box-shadow:2px 2px 0 #333}
+.notes>div::after{content:"";position:absolute;inset:-1px;border:1.5px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.notes .h{font-size:12.5px;font-weight:700;margin-bottom:3px}
+.notes .t{font-size:11.5px;color:#3f3f3f;line-height:1.6}
+.notes .t code{font-family:Consolas,monospace;font-size:11px;background:#ffffffcf;
+  border:1.2px solid #333;border-radius:4px;padding:0 4px}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>Scaled Dot-Product Attention <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">six steps, and why each one is there</div>
+</div>
+
+<div class="sec">① 三路线性投影：从 X 分出 Q / K / V<span class="en">projections</span></div>
+<div class="proj">
+  <div class="box" style="flex:0 0 auto;min-width:104px">X<span class="dim">n × d_model</span></div>
+  <div class="stack3">
+    <div class="prow"><span class="ar">→</span><div class="box q">W_Q → Q<span class="dim">n × d_k</span></div></div>
+    <div class="prow"><span class="ar">→</span><div class="box kk">W_K → K<span class="dim">n × d_k</span></div></div>
+    <div class="prow"><span class="ar">→</span><div class="box vv">W_V → V<span class="dim">n × d_v</span></div></div>
+  </div>
+</div>
+
+<div class="sec">② 主计算链：Q 和 K 进来，V 绕到最后<span class="en">the main chain</span></div>
+<div class="chain">
+  <div class="box q">MatMul<code>Q · K^T</code>
+    <span class="note">n × n 分数矩阵</span></div>
+  <span class="ar">→</span>
+  <div class="box s">Scale<code>÷ √d_k</code></div>
+  <span class="ar">→</span>
+  <div class="box m">Mask<code>(opt.)</code></div>
+  <span class="ar">→</span>
+  <div class="box kk">Softmax
+    <span class="note">每行归一化到 1</span></div>
+  <span class="ar">→</span>
+  <div class="box vv">MatMul<code>· V</code></div>
+  <span class="ar">→</span>
+  <div class="box q">Z<span class="dim">n × d_v</span></div>
+</div>
+
+<div class="formula">
+  <span class="lbl">formula</span>
+  <code>Attention(Q, K, V) = softmax( Q · K^T / √d_k ) · V</code>
+</div>
+
+<div class="notes">
+  <div>
+    <div class="h">为什么除以 √d_k</div>
+    <div class="t">当 <code>d_k</code> 增大，点积的方差随之增大，会把 softmax 推进梯度趋近于 0 的饱和区。
+      除以 <code>√d_k</code> 把方差重新拉回 1 附近。</div>
+  </div>
+  <div>
+    <div class="h">Mask 只在解码器自注意力里开</div>
+    <div class="t">把「未来位置」的分数置为负无穷，softmax 之后权重就是 0 ——
+      这是自回归生成不打乱顺序的关键。</div>
+  </div>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">Q 和 K 负责算出「谁该看谁」，V 才是被加权取走的内容</span>
+</div>
+</body>
+</html>

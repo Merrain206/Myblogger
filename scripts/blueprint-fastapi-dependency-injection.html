@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>依赖注入的解析过程 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --route:#F3E8FF;  --route-d:#7C3AED;
+  --auth:#FEF3C7;   --auth-d:#B45309;
+  --sub:#DBEAFE;    --sub-d:#2563EB;
+  --data:#DCFCE7;   --data-d:#059669;
+  --cache:#FBE5D6;  --cache-d:#C2410C;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:940px;margin:0 auto;padding:32px 40px 34px;
+}
+.cover-head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--auth-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+.box{
+  position:relative;border-radius:8px;padding:8px 12px;text-align:center;
+  font-size:12.5px;font-weight:600;background:#fff;box-shadow:2px 2px 0 #333;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.box .dim{display:block;font-size:10.5px;font-weight:400;color:#555;margin-top:2px}
+.box code{font-family:Consolas,monospace;font-size:11px;background:#ffffffd0;
+  border:1.2px solid #333;border-radius:4px;padding:0 5px;display:inline-block;margin:2px 0}
+.route{background:var(--route)} .auth{background:var(--auth)}
+.sub{background:var(--sub)}     .data{background:var(--data)}
+
+.ar{text-align:center;font-size:15px;color:#333;line-height:1;margin:4px 0}
+.ar span{font-size:10.5px;color:#666;margin-left:5px}
+
+/* 四路并行 */
+.subs{display:flex;align-items:flex-start;gap:10px;margin-top:2px}
+.subs .col{flex:1 1 0;min-width:0;display:flex;flex-direction:column}
+.subs .col .box{word-break:break-word;font-size:11.5px;min-height:44px;
+  display:flex;flex-direction:column;justify-content:center}
+.subs .col .box.wide{font-size:11px}
+
+/* 缓存回绕说明 */
+.cache{
+  margin-top:14px;position:relative;border:1.7px dashed var(--cache-d);
+  border-radius:9px;padding:10px 14px;background:#fff8f2;
+}
+.cache .tag{
+  position:absolute;top:-10px;left:14px;background:var(--paper);padding:0 7px;
+  font-family:"Caveat",cursive;font-size:16px;color:var(--cache-d);
+}
+.cache .t{font-size:11.5px;color:#3f3f3f}
+.cache .t code{font-family:Consolas,monospace;font-size:11px;background:#ffffffd0;
+  border:1.2px solid #333;border-radius:4px;padding:0 4px}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>依赖注入的解析过程 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">how Depends() actually gets resolved</div>
+</div>
+
+<div class="box route">
+  路由函数
+  <span class="dim">
+    <code>dependencies=[Depends(...)]</code> 只执行、不要返回值<br>
+    参数注入 <code>user_api_key_dict=Depends(...)</code>
+  </span>
+</div>
+
+<div class="ar">↓<span>沿着依赖链向下解析</span></div>
+
+<div class="box auth">user_api_key_auth<span class="dim">核心依赖函数</span></div>
+
+<div class="ar">↓<span>并行解析它的四个子依赖</span></div>
+
+<div class="subs">
+  <div class="col">
+    <div class="box sub">api_key_header</div>
+  </div>
+  <div class="col">
+    <div class="box sub">azure_api_key_header</div>
+  </div>
+  <div class="col">
+    <div class="box sub">另外 4 个<br>Security 头</div>
+  </div>
+  <div class="col">
+    <div class="box sub wide">_user_api_key_auth_builder</div>
+    <div class="ar">↓</div>
+    <div class="box data">查 Postgres<br>校验密钥</div>
+    <div class="ar">↓</div>
+    <div class="box data">UserAPIKeyAuth<br>对象</div>
+  </div>
+</div>
+
+<div class="cache">
+  <span class="tag">同一次请求内缓存复用</span>
+  <div class="t">FastAPI 默认 <code>use_cache=True</code>：同一个依赖在同一次请求里<b>只解析一次</b>，
+    结果被缓存。所以即使路由函数用两种方式引用了它，那条查 Postgres 的链路也只走一遍。</div>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">依赖是「声明」出来的，不是你手动调的 —— 解析顺序和缓存都由框架包了</span>
+</div>
+</body>
+</html>

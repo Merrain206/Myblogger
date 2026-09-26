@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>RAG 的两条流水线 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --off:#DCFCE7;  --off-d:#059669;
+  --on:#DBEAFE;   --on-d:#2563EB;
+  --gen:#FFEDD5;  --gen-d:#EA580C;
+  --ans:#FEF3C7;  --ans-d:#B45309;
+  --flow:#059669;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:980px;margin:0 auto;padding:32px 38px 34px;
+}
+.cover-head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--off-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+.stage{position:relative;border:1.8px dashed #a8a29a;border-radius:11px;padding:22px 14px 14px}
+.stitle{
+  position:absolute;top:-11px;left:16px;background:var(--paper);padding:0 8px;
+  font-family:"ZCOOL KuaiLe",sans-serif;font-size:14px;
+}
+.stage.off .stitle{color:var(--off-d)}
+.stage.on .stitle{color:var(--on-d)}
+
+/* 两个阶段必须共用同一套列定义，③ 和 ⑥ 才真的竖向对齐。
+   用 auto 列时两阶段各自算列宽，绿色虚线会连歪。 */
+.rag{display:grid;grid-template-columns:repeat(9,1fr);
+  align-items:center;gap:7px 4px}
+
+.box{
+  position:relative;border-radius:7px;padding:7px 10px;text-align:center;
+  font-size:11.5px;font-weight:600;box-shadow:2px 2px 0 #333;white-space:nowrap;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.5px solid #333;
+  border-radius:7px 10px 7px 9px;filter:url(#wobble);pointer-events:none}
+.box .dim{display:block;font-size:10px;font-weight:400;color:#555;margin-top:1px}
+.box .n{display:inline-block;width:14px;height:14px;line-height:13px;text-align:center;
+  border-radius:50%;color:#fff;font-size:9px;margin-right:3px;vertical-align:1px}
+.off .box{background:var(--off)} .off .n{background:var(--off-d)}
+.on .box{background:var(--on)}  .on .n{background:var(--on-d)}
+.on .box.gen{background:var(--gen)} .on .box.gen .n{background:var(--gen-d)}
+.box.ans{background:var(--ans)} .box.ready{background:var(--off)}
+.box.ans,.box.ready{font-size:12px;padding:7px 14px}
+
+.ar{font-size:14px;color:#777;text-align:center}
+
+/* 跨阶段的数据流：竖直绿色虚线，落在第 5 列（= ③ 与 ⑥ 的列） */
+.bridge{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;padding:2px 0}
+.bridge .ln{width:0;height:20px;border-left:2.2px dashed var(--flow);position:relative}
+.bridge .ln::after{content:"";position:absolute;bottom:-1px;left:-5px;
+  border-left:5px solid transparent;border-right:5px solid transparent;
+  border-top:8px solid var(--flow)}
+.bridge .lbl{font-size:10px;color:var(--flow);white-space:nowrap}
+
+.merge{
+  grid-column:1 / 10;text-align:center;font-size:11px;color:#444;margin-top:2px;
+}
+.merge b{color:#111}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>RAG 的两条流水线 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">one runs once, the other runs on every question</div>
+</div>
+
+<div class="stage off">
+  <div class="stitle">离线阶段（文档预处理）</div>
+  <div class="rag">
+    <div class="box" style="grid-column:1"><span class="n">1</span>文档切割<span class="dim">按语义分 chunk</span></div>
+    <div class="ar" style="grid-column:2">→</div>
+    <div class="box" style="grid-column:3"><span class="n">2</span>Embedding<span class="dim">文本 → 向量</span></div>
+    <div class="ar" style="grid-column:4">→</div>
+    <div class="box" style="grid-column:5"><span class="n">3</span>向量数据库<span class="dim">持久化存储</span></div>
+    <div class="ar" style="grid-column:6">→</div>
+    <div class="box ready" style="grid-column:7 / 10">就绪 ✓</div>
+  </div>
+</div>
+
+<div class="rag">
+  <div class="bridge" style="grid-column:5">
+    <span class="ln"></span>
+    <span class="lbl">向量 DB 读取</span>
+  </div>
+</div>
+
+<div class="stage on">
+  <div class="stitle">在线阶段（实时查询）</div>
+  <div class="rag">
+    <div class="box" style="grid-column:1"><span class="n">4</span>用户提问<span class="dim">自然语言输入</span></div>
+    <div class="ar" style="grid-column:2">→</div>
+    <div class="box" style="grid-column:3"><span class="n">5</span>Query Embed<span class="dim">问题向量化</span></div>
+    <div class="ar" style="grid-column:4">→</div>
+    <div class="box" style="grid-column:5"><span class="n">6</span>向量检索<span class="dim">ANN 查 Top-K</span></div>
+    <div class="ar" style="grid-column:6">→</div>
+    <div class="box gen" style="grid-column:7"><span class="n">7</span>LLM 生成<span class="dim">Prompt + 片段</span></div>
+    <div class="ar" style="grid-column:8">→</div>
+    <div class="box ans" style="grid-column:9">答案</div>
+
+    <div class="merge">↑ <b>第 6 步是两条流的汇合点</b>：一边收问题向量，一边从向量库里取片段</div>
+  </div>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">离线那条只跑一次，在线那条每问一次就跑一遍 —— 第 6 步把它们接上</span>
+</div>
+</body>
+</html>

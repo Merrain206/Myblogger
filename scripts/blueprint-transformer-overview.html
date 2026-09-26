@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Transformer 架构 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --attn:#F3E8FF;   --attn-d:#7C3AED;    /* 注意力子层 */
+  --ffn:#DCFCE7;    --ffn-d:#059669;     /* 前馈子层 */
+  --norm:#FBE5D6;   --norm-d:#C2410C;    /* 归一化 / 残差 */
+  --emb:#EFEDE6;    --emb-d:#6B7280;     /* 嵌入 */
+  --out:#DBEAFE;    --out-d:#2563EB;     /* 输出层 */
+  --skip:#C0392B;                        /* 残差虚线 */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:900px;margin:0 auto;padding:32px 40px 34px;
+}
+.cover-head{text-align:center;margin-bottom:10px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:31px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:var(--out-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+/* 图例 */
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 14px;margin:12px 0 16px}
+.legend span{display:flex;align-items:center;gap:5px;font-size:11.5px;color:#444}
+.swatch{width:13px;height:13px;border:1.4px solid #333;border-radius:4px;display:inline-block}
+.dash-swatch{width:16px;height:0;border-top:2px dashed var(--skip);display:inline-block}
+
+/* 两列主体 */
+.cols{display:flex;gap:26px;align-items:flex-end}
+.col{flex:1 1 0;min-width:0}
+.col-frame{
+  position:relative;border-radius:10px;padding:12px 12px 12px 26px;
+  background:#ffffff9c;
+}
+.col-frame::after{content:"";position:absolute;inset:-1px;border:2px solid #333;
+  border-radius:10px 14px 9px 13px;filter:url(#wobble);pointer-events:none}
+.enc .col-frame{background:#eff6ff8c}   /* 编码器：极淡蓝 */
+.dec .col-frame{background:#fff7ed8c}   /* 解码器：极淡橙 */
+
+.col-name{font-family:"ZCOOL KuaiLe",sans-serif;font-size:16px;text-align:center;margin-bottom:2px}
+.col-en{font-family:"Caveat",cursive;font-size:16px;color:var(--ink2);text-align:center;margin-bottom:8px}
+.nx{position:absolute;left:6px;top:12px;font-family:"Caveat",cursive;font-size:22px;color:#444}
+
+/* 栈：DOM 顺序是 输入→输出，视觉反转成 输出在上 */
+.stack{display:flex;flex-direction:column-reverse;gap:7px}
+
+.box{
+  position:relative;border-radius:7px;padding:7px 9px;text-align:center;
+  font-size:12.2px;font-weight:600;box-shadow:2px 2px 0 #333;background:#fff;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:7px 10px 7px 9px;filter:url(#wobble);pointer-events:none}
+.box .sub{display:block;font-size:10.5px;font-weight:400;color:#555;margin-top:1px}
+.a{background:var(--attn)} .f{background:var(--ffn)} .n{background:var(--norm)}
+.e{background:var(--emb)}  .o{background:var(--out)}
+.box.dim{font-weight:400;font-size:11.5px}
+
+/* 残差旁路：单元左侧一条虚线，从子层绕到其后的 Add & Norm */
+.unit{position:relative;padding-left:15px}
+.unit::before{
+  content:"";position:absolute;left:3px;top:14px;bottom:14px;
+  border-left:1.8px dashed var(--skip);
+}
+.unit .arrow-in{
+  /* 残差从子层输入（unit 底部）向上绕到 Add & Norm 输出，所以箭头在顶部、尖端朝上 */
+  position:absolute;left:0px;top:8px;width:7px;height:7px;
+  border-top:1.8px solid var(--skip);border-right:1.8px solid var(--skip);
+  transform:rotate(-45deg);
+}
+.unit-inner{display:flex;flex-direction:column-reverse;gap:7px}
+
+/* 流程箭头 */
+.flow-arrow{display:block;margin:2px auto;width:18px;height:18px}
+
+/* 输入区（在框内底部） */
+.io{margin-top:8px;text-align:center}
+.io .tag{
+  display:inline-block;font-size:11.5px;background:#fff;border:1.5px solid #333;
+  border-radius:6px;padding:1px 9px;box-shadow:1.5px 1.5px 0 #333;position:relative;
+}
+.io .tag::after{content:"";position:absolute;inset:-1px;border:1.4px solid #333;
+  border-radius:6px;filter:url(#wobble);pointer-events:none}
+.io .plus{font-family:"ZCOOL KuaiLe",sans-serif;font-size:15px;margin:0 3px}
+.io .cap{font-size:11px;color:#666;margin-top:3px}
+
+/* K,V 说明 */
+.kv{
+  margin-top:7px;font-size:11px;color:#1d4ed8;background:#dbeafecc;border:1.4px dashed #2563eb;
+  border-radius:6px;padding:3px 8px;text-align:center;
+}
+
+/* 底部总结 */
+.capsule{
+  margin-top:16px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+.src{margin-top:9px;text-align:center;font-size:10.5px;color:#8a8a8a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>Transformer 架构 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">the same architecture, redrawn by hand</div>
+</div>
+
+<div class="legend">
+  <span><i class="swatch" style="background:var(--attn)"></i>注意力子层</span>
+  <span><i class="swatch" style="background:var(--ffn)"></i>前馈子层</span>
+  <span><i class="swatch" style="background:var(--norm)"></i>Add &amp; Norm</span>
+  <span><i class="swatch" style="background:var(--emb)"></i>嵌入</span>
+  <span><i class="swatch" style="background:var(--out)"></i>输出层</span>
+  <span><i class="dash-swatch"></i>残差旁路</span>
+</div>
+
+<div class="cols">
+
+  <!-- ================= 编码器 ================= -->
+  <div class="col enc">
+    <div class="col-frame">
+      <div class="nx">N ×</div>
+      <div class="col-name">编码器</div>
+      <div class="col-en">encoder</div>
+
+      <div class="stack">
+        <!-- DOM 顺序：输入 → 输出（视觉上下相反） -->
+        <div class="io">
+          <span class="tag">Inputs</span>
+          <div class="cap">我 喜欢 学习</div>
+        </div>
+        <div class="box e">Input Embedding</div>
+        <div class="io">
+          <span class="tag">Positional Encoding</span>
+          <span class="plus">＋</span>
+        </div>
+
+        <div class="unit">
+          <div class="arrow-in"></div>
+          <div class="unit-inner">
+            <div class="box a">Multi-Head<br>Self-Attention</div>
+            <div class="box n">Add &amp; Norm</div>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="arrow-in"></div>
+          <div class="unit-inner">
+            <div class="box f">Feed Forward</div>
+            <div class="box n">Add &amp; Norm</div>
+          </div>
+        </div>
+
+        <div class="kv">Encoder 输出 → 作为 K, V 送入右侧</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 解码器 ================= -->
+  <div class="col dec">
+    <div class="col-frame">
+      <div class="nx">N ×</div>
+      <div class="col-name">解码器</div>
+      <div class="col-en">decoder</div>
+
+      <div class="stack">
+        <div class="io">
+          <span class="tag">Outputs (shifted right)</span>
+          <div class="cap">&lt;sos&gt; I like</div>
+        </div>
+        <div class="box e">Output Embedding</div>
+        <div class="io">
+          <span class="tag">Positional Encoding</span>
+          <span class="plus">＋</span>
+        </div>
+
+        <div class="unit">
+          <div class="arrow-in"></div>
+          <div class="unit-inner">
+            <div class="box a">Masked Multi-Head<br>Self-Attention</div>
+            <div class="box n">Add &amp; Norm</div>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="arrow-in"></div>
+          <div class="unit-inner">
+            <div class="box a">Multi-Head<br>Cross-Attention
+              <span class="sub">K, V 来自左侧编码器</span></div>
+            <div class="box n">Add &amp; Norm</div>
+          </div>
+        </div>
+
+        <div class="unit">
+          <div class="arrow-in"></div>
+          <div class="unit-inner">
+            <div class="box f">Feed Forward</div>
+            <div class="box n">Add &amp; Norm</div>
+          </div>
+        </div>
+
+        <!-- 顶部输出层 -->
+        <div class="box n">Add &amp; Norm</div>
+        <div class="box o">Linear</div>
+        <div class="box o">Softmax</div>
+        <div class="io"><span class="tag">Output Probabilities</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">左边读输入，右边生成输出 —— 每个子层都靠一条残差旁路把原始信号直接送到 Add &amp; Norm</span>
+</div>
+
+<div class="src">重绘自《Attention Is All You Need》(arXiv:1706.03762) Figure 1 · 模块堆叠 N 次，原图未标注具体层数</div>
+
+</body>
+</html>

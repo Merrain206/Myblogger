@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Multi-Head 的子空间分解 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:960px;margin:0 auto;padding:32px 40px 34px;
+}
+.cover-head{text-align:center;margin-bottom:14px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:#7C3AED}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+
+.sec{font-family:"ZCOOL KuaiLe",sans-serif;font-size:15px;margin:15px 0 8px;
+  padding-left:11px;border-left:4px solid #333}
+.sec .en{font-family:"Caveat",cursive;font-size:15px;color:var(--ink2);margin-left:7px}
+
+.box{
+  position:relative;border-radius:8px;padding:8px 10px;text-align:center;
+  font-size:12.5px;font-weight:600;background:#fff;box-shadow:2px 2px 0 #333;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.box .dim{display:block;font-size:10.5px;font-weight:400;color:#666;margin-top:2px}
+.purple{background:#F3E8FF}
+
+/* 主流程：左 X ｜ 中 8 heads ｜ 右汇聚 */
+.flow{display:flex;align-items:center;gap:12px}
+.left{flex:0 0 96px;display:flex;flex-direction:column;align-items:center;gap:5px}
+.left .box{width:100%}
+.mid{display:flex;flex-direction:column;align-items:center;gap:2px;flex:0 0 auto}
+.cut{font-size:10.5px;color:#555;background:#fff;border:1.3px dashed #333;
+  border-radius:5px;padding:0 7px}
+
+.heads{flex:1 1 auto;min-width:0;position:relative;padding-left:14px}
+/* 左侧竖直虚线 = 从 X 分出的分支总线 */
+.heads::before{content:"";position:absolute;left:3px;top:50%;height:calc(100% - 40px);
+  transform:translateY(-50%);border-left:2px dotted #333}
+.head{position:relative;display:flex;align-items:center;gap:9px;
+  border-radius:7px;padding:5px 10px;margin-bottom:5px;
+  box-shadow:2px 2px 0 #333;font-size:12px}
+.head:last-child{margin-bottom:0}
+.head::after{content:"";position:absolute;inset:-1px;border:1.5px solid #333;
+  border-radius:7px 10px 7px 9px;filter:url(#wobble);pointer-events:none}
+.head .no{flex:0 0 56px;font-weight:700}
+.head .dk{flex:0 0 auto;font-family:Consolas,monospace;font-size:11px;color:#444}
+.head .mode{flex:1 1 auto;text-align:right;font-weight:700}
+.b1{background:#DBEAFE} .b2{background:#DCFCE7} .b3{background:#FFEDD5} .b4{background:#F3E8FF}
+.b5{background:#FEE2E2} .b6{background:#E0F2FE} .b7{background:#F5EDE0} .b8{background:#FCE7F3}
+
+.rightside{flex:0 0 118px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.rightside .box{width:100%}
+.concat{font-family:"Caveat",cursive;font-size:17px;color:#5b21b6}
+
+.ar{font-size:16px;color:#333}
+
+/* 说明卡 */
+.notes{display:flex;gap:11px;margin-top:6px}
+.notes>div{flex:1 1 0;position:relative;background:#fff;border-radius:8px;
+  padding:9px 12px;box-shadow:2px 2px 0 #333}
+.notes>div::after{content:"";position:absolute;inset:-1px;border:1.5px solid #333;
+  border-radius:8px 11px 8px 10px;filter:url(#wobble);pointer-events:none}
+.notes .h{font-size:12.5px;font-weight:700;margin-bottom:3px}
+.notes .t{font-size:11.5px;color:#3f3f3f;line-height:1.6}
+.notes .t code{font-family:Consolas,monospace;font-size:11px;background:#ffffffcf;
+  border:1.2px solid #333;border-radius:4px;padding:0 4px;
+  white-space:nowrap}   /* 别让 d_k = d_v = 64 这类式子从中间断成两行 */
+.notes b{color:#111}
+
+.capsule{
+  margin-top:15px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>Multi-Head 的子空间分解 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">eight heads, eight different things to look at</div>
+</div>
+
+<div class="sec">① 把 d_model 切成 8 份，每份独立做注意力<span class="en">split &amp; attend</span></div>
+<div class="flow">
+  <div class="left">
+    <div class="box">X<span class="dim">n × 512</span></div>
+  </div>
+  <div class="mid">
+    <span class="ar">→</span>
+    <span class="cut">切分</span>
+  </div>
+
+  <div class="heads">
+    <div class="head b1"><span class="no">Head 1</span><span class="dk">d_k = 64</span><span class="mode">语法依存</span></div>
+    <div class="head b2"><span class="no">Head 2</span><span class="dk">d_k = 64</span><span class="mode">代词指代</span></div>
+    <div class="head b3"><span class="no">Head 3</span><span class="dk">d_k = 64</span><span class="mode">局部搭配</span></div>
+    <div class="head b4"><span class="no">Head 4</span><span class="dk">d_k = 64</span><span class="mode">语义角色</span></div>
+    <div class="head b5"><span class="no">Head 5</span><span class="dk">d_k = 64</span><span class="mode">时态一致</span></div>
+    <div class="head b6"><span class="no">Head 6</span><span class="dk">d_k = 64</span><span class="mode">位置邻近</span></div>
+    <div class="head b7"><span class="no">Head 7</span><span class="dk">d_k = 64</span><span class="mode">词形变化</span></div>
+    <div class="head b8"><span class="no">Head 8</span><span class="dk">d_k = 64</span><span class="mode">领域实体</span></div>
+  </div>
+
+  <div class="ar">→</div>
+  <div class="rightside">
+    <div class="concat">Concat</div>
+    <div class="box purple">W_O<span class="dim">512 × 512</span></div>
+    <div class="box purple">Z<span class="dim">n × 512</span></div>
+  </div>
+</div>
+
+<div class="sec">② 为什么要这么做<span class="en">why bother</span></div>
+<div class="notes">
+  <div>
+    <div class="h">一个头只能说一种话</div>
+    <div class="t">单个注意力头只能输出一种「加权平均」模式。把 512 维切成 8 个 64 维子空间并行做注意力，
+      模型就能<b>同时</b>关注不同类型的依赖关系。</div>
+  </div>
+  <div>
+    <div class="h">但不是把算力翻 8 倍</div>
+    <div class="t">这是最容易被误解的一点：每个头只处理 <code>d_model / h</code> 维，
+      8 个头合起来的总计算量，与单头 <code>d_model</code> 维相当。</div>
+  </div>
+  <div>
+    <div class="h">论文里的具体配置</div>
+    <div class="t"><code>h = 8</code>、<code>d_k = d_v = 64</code> 是原论文 base 模型的配置；
+      big 模型用 <code>h = 16</code>、<code>d_k = d_v = 64</code>。</div>
+  </div>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">多头不是让模型看得更多，而是让它能同时看不同的东西 —— 算力没有变贵</span>
+</div>
+</body>
+</html>

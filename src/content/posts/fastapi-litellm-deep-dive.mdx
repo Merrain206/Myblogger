@@ -1,0 +1,880 @@
+---
+title: "FastAPI 深潜：拆解 58k 星的 LLM 网关 litellm"
+date: "2026-09-15"
+category: "后端"
+tags: ["Python", "后端", "AI"]
+summary: "以 58k star 的 litellm 网关为解剖样本，从 ASGI 三层架构、lifespan、依赖注入、Pydantic 校验到流式响应与中间件顺序，把 FastAPI 从「会用装饰器」讲到「知道它在替你做什么」，并附一套可复现的完整实操。"
+---
+
+你大概已经会写 FastAPI 了：`@app.get("/")`、`def hello()`、打开 `/docs` 看到漂亮的接口文档，收工。
+
+但如果有人问你：**`Depends` 到底在什么时候被调用？为什么同步函数不会阻塞整个服务？中间件是谁先执行？`lifespan` 和 `@app.on_event` 有什么区别？** —— 能顺畅答上来的人并不多。
+
+问题出在学习的路径上。大多数教程教你"怎么写"，而框架真正的设计意图，藏在**生产项目的源码**里。
+
+这篇文章换个学法：找一个真实的重型项目，把它剖开，用它的代码来理解 FastAPI 的每一层。我选的样本是 **litellm**——一个 58,706 star 的 LLM 网关，它的整个后端就是一个 FastAPI 应用，而且把框架的特性用到了极致。
+
+## 一、为什么拿 litellm 当解剖样本
+
+### 它是什么
+
+一句话：**litellm 把 100 多家大模型供应商的 API，统一成 OpenAI 的格式**。
+
+你写代码时只认 `openai` 这一套接口，想换供应商就改一个模型名字符串。真正发请求的事，交给 litellm。
+
+![litellm 在应用和模型供应商之间的位置](/images/blog/fastapi-gateway-overview.png)
+
+它有两个形态：一个 Python SDK（`import litellm`），和一个 **Proxy 网关**（一个独立的 HTTP 服务，跑在 4000 端口）。我们要拆的是后者——因为它就是一个完整的 FastAPI 应用。
+
+为什么网关这个东西有价值？因为生产环境里，你几乎一定需要这些能力：
+
+- **统一的密钥管理**：100 个供应商的 key 集中托管，应用侧只拿一把虚拟 key
+- **预算与限流**：按团队、按用户限制额度
+- **故障降级**：OpenAI 挂了自动切到备用供应商
+- **成本统计**：每次调用花了多少钱，记到数据库里
+
+这些全部由 litellm Proxy 提供，全部由 FastAPI 承载。
+
+### 为什么它是最好的样本
+
+我在挑选分析对象时定了三条标准，litellm 全部满足，而且数字很夸张：
+
+| 指标 | 实测值 |
+|------|--------|
+| Stars | 58,706（2026-09-14 实测，不是网上流传的 36k） |
+| Forks | 11,426 |
+| 最新版本 | v1.100.1 |
+| 生产 Python 文件 | 2,622 个，合计 33.7 MB |
+| **核心单文件** | `litellm/proxy/proxy_server.py`：**19,169 行 / 803 KB** |
+
+最后一行不是笔误。**一个 19,169 行的 `.py` 文件**——这个数字本身就是一堂课，我们在第六章会专门讲它。
+
+而在 FastAPI 特性的使用密度上，它的数据是这样的（对 `proxy_server.py` 做关键词统计）：
+
+| FastAPI 特性 | 出现次数 |
+|---|---|
+| `Depends(` | **130** |
+| `include_router` | 53 |
+| `StreamingResponse` | 13 |
+| `@app.exception_handler` | 9 |
+| `add_middleware` | 8 |
+
+130 次依赖注入——这不是教学示例，这是一个把 `Depends` 用到骨子里的真实系统。
+
+> ⚠️ **一个必须提前说明的事实**：litellm 正在把网关核心向 Rust 迁移（仓库里已有 `litellm-rust/` 目录，README 的描述改成了 "Rust core with Python SDK"）。本文分析的是**仍然存在并持续维护的 Python FastAPI 网关部分**（基于 v1.100.1 源码）。选它是因为它是当下最好的 FastAPI 实战教材，但你应该知道上游的动向。
+
+---
+
+## 二、地基：ASGI 与三层架构
+
+### 从 WSGI 到 ASGI
+
+如果你读过本博客的[《Python 异步编程入门指南》](/blog/python-async-guide)，你已经知道 `async/await` 和事件循环是怎么回事。这里只需要补上最后一环：**Web 框架怎么和事件循环对接**。
+
+- **WSGI**（Flask、Django 的默认模式）：一个请求占一个线程/进程，等数据库时那个线程就干等着
+- **ASGI**（FastAPI、Starlette）：一个异步函数就能处理多个并发请求，等待时把控制权交还事件循环
+
+FastAPI 快，根本原因不在 FastAPI 自己，而在于它站在 ASGI 之上。
+
+### 三层，不是一层
+
+很多人以为"FastAPI 就是 FastAPI"，实际上它是三个东西叠起来的：
+
+![FastAPI 的三层结构](/images/blog/fastapi-layers.png)
+
+- **Starlette**：底层的 ASGI 框架，负责路由匹配、中间件链、WebSocket、请求响应对象
+- **Pydantic**：数据校验库，把 Python 类型注解变成运行时的校验规则
+- **FastAPI**：在上面两层之间加的一层"粘合剂"，提供依赖注入、参数解析、和自动生成 OpenAPI 文档
+
+作者 Sebastián Ramírez 自己说过一句被引用很多次的话：**"FastAPI 只是 Starlette 和 Pydantic 的混合。"** 这不是谦虚，是字面意义上的架构描述。
+
+理解这一点很关键：当你写 `app.add_middleware(...)` 时，你调用的其实是 Starlette 的能力；当你写 `class Item(BaseModel)` 时，用的是 Pydantic 的能力。FastAPI 的贡献是把它们缝合成一个符合 Python 直觉的开发体验。
+
+### 一次请求的完整旅程
+
+把这三层串起来，一次请求在 litellm 里的完整路径是这样的：
+
+![一次请求从进入到返回的完整生命周期](/images/blog/fastapi-request-lifecycle.png)
+
+对照 litellm 的真实代码，`app` 是这样被创建的（`proxy_server.py` 第 1502 行）：
+
+```python
+app = FastAPI(
+    docs_url=_get_docs_url(),              # 文档地址可定制
+    redoc_url=_get_redoc_url(),
+    openapi_url=_get_openapi_url(),
+    title=_title,
+    description=_description,
+    version=version,
+    root_path=server_root_path,            # 支持部署在子路径下
+    lifespan=proxy_startup_event,          # 生命周期钩子，下一章详讲
+    generate_unique_id_function=_generate_stable_operation_id,  # 自定义 OpenAPI 的 operationId
+    strict_content_type=False,             # 放宽 Content-Type 校验
+)
+```
+
+这短短十行里有三个值得注意的信号：
+
+1. **`docs_url` 是算出来的，不是写死的**。litellm 没有用 FastAPI 默认的 `/docs`，而是通过函数动态决定——因为在网关这种场景下，**暴露 API 结构本身就是风险**。我实测的结果是：`/docs` 返回 404，而是 `/redoc` 提供了一个完整的 API 文档页。
+
+2. **`generate_unique_id_function`** 决定了 OpenAPI 里每个操作的 `operationId`。默认值是"函数名+路径"拼出来的，当你有 53 个 router、几百个端点时，很容易撞车。litellm 换成了一个稳定实现——这和你用自动生成的前端客户端直接相关。
+
+3. **`strict_content_type=False`**：Starlette 默认会校验请求的 `Content-Type`，而网关要转发各种各样客户端发来的请求（很多第三方 SDK 的 `Content-Type` 并不规范），所以必须放宽。
+
+**这就是读生产代码的价值**：`FastAPI()` 的构造函数在文档里是一张参数表，在这里是一组真实的取舍。
+
+---
+
+## 三、lifespan：应用启动时该做什么
+
+### 为什么弃用 on_event
+
+早期 FastAPI 用 `@app.on_event("startup")` 做启动初始化，但它有几个毛病：启动和关闭逻辑分散在装饰器里、无法共享变量、异常处理语义模糊。现在推荐的是 **lifespan**：
+
+```python
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # yield 之前：应用启动时执行
+    db_pool = await create_pool()
+    yield
+    # yield 之后：应用关闭时执行
+    await db_pool.close()
+
+app = FastAPI(lifespan=lifespan)
+```
+
+用一个异步上下文管理器把"启动"和"关闭"收进同一个函数，`yield` 是分界线。
+
+### litellm 在启动时做什么
+
+`proxy_server.py` 第 1079 行的 `proxy_startup_event` 是整份代码里最长的函数之一。开头是这样：
+
+```python
+@asynccontextmanager
+async def proxy_startup_event(app: FastAPI) -> AsyncGenerator[None, None]:
+    global \
+        prisma_client, \
+        master_key, \
+        llm_router, \
+        llm_model_list, \
+        general_settings, \
+        db_writer_client, \
+        store_model_in_db, \
+        shared_aiohttp_session
+    # ... 16 个全局变量
+```
+
+它的工作包括：
+
+- 读取 YAML 配置，把模型列表加载进 `llm_router`
+- 初始化 **Prisma 数据库客户端**（存放密钥、预算、用量记录）
+- 创建 **共享的 aiohttp 会话**（`shared_aiohttp_session`）——一个复用的 HTTP 连接池
+- 注册各种后台任务（预算重算、健康检查）
+
+### 为什么连接池必须在启动时建
+
+这是初学者最容易踩的坑，值得单独说清楚：
+
+```python
+# ❌ 反模式：每个请求新建客户端
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    async with aiohttp.ClientSession() as session:   # 每次请求都重新建连接
+        async with session.post(upstream_url, json=req.dict()) as resp:
+            return await resp.json()
+```
+
+这段代码"能跑"，但在生产环境有两个致命问题：
+
+1. **TCP 握手成本转嫁给了用户**：每次请求都要重新建 TLS 连接，延迟白白增加几十到几百毫秒
+2. **连接数失控**：并发 500 时就是 500 个连接，很快就打满上游的连接数限制或被判定为攻击
+
+正确的做法是在 lifespan 里建一个长期存活的会话，全局复用：
+
+```python
+# ✅ 正确：启动时建一次，全局复用
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.http = aiohttp.ClientSession(
+        connector=aiohttp.TCPConnector(limit=200, limit_per_host=50),
+    )
+    yield
+    await app.state.http.close()
+```
+
+litellm 就是这么做的（`shared_aiohttp_session`）。**lifespan 的正确用途，是管理"和应用同生命周期"的资源**：连接池、数据库客户端、模型加载、缓存实例。
+
+> 顺带一个反面对照：FastAPI 官方全栈模板（`fastapi/full-stack-fastapi-template`，45k star）**完全没有用 lifespan**。它的数据库迁移和初始数据创建放在部署脚本 `prestart.sh` 里执行。这不是疏漏，而是刻意的立场——**数据库迁移属于部署步骤，不属于应用启动步骤**（在多 worker 模式下，每个 worker 启动都跑一遍迁移会出事故）。两者并不矛盾：连接池该进 lifespan，迁移不该进。
+
+---
+
+## 四、依赖注入：FastAPI 最被低估的设计
+
+如果说 FastAPI 只能保留一个特性，我会选 `Depends`。litellm 用了 **130 次**，这不是巧合。
+
+### 从一个真实案例说起
+
+网关的核心问题是：**每个请求都要验证 API Key，然后才能转发**。这个逻辑你不可能在每个路由里都写一遍。
+
+litellm 的做法是把"认证"整个做成一个依赖（`proxy_server.py` 第 3011 行）：
+
+```python
+async def user_api_key_auth(
+    request: Request,
+    api_key: str = fastapi.Security(api_key_header),
+    azure_api_key_header: str = fastapi.Security(azure_api_key_header),
+    anthropic_api_key_header: str | None = fastapi.Security(anthropic_api_key_header),
+    google_ai_studio_api_key_header: str | None = fastapi.Security(google_ai_studio_api_key_header),
+    azure_apim_header: str | None = fastapi.Security(azure_apim_header),
+    custom_litellm_key_header: str | None = fastapi.Security(custom_litellm_key_header),
+) -> UserAPIKeyAuth:
+    """
+    Parent function to authenticate user api key / jwt token.
+    """
+```
+
+请仔细看这个签名，它一口气展示了 FastAPI 依赖注入的三个能力：
+
+1. **依赖可以是普通函数**，参数由框架自动解析
+2. **依赖可以读取 HTTP 层的东西**：`Request` 对象、各种 Header
+3. **依赖有返回值**，路由函数可以直接使用
+
+注意这里用的是 **`fastapi.Security()` 而不是 `Depends()`**。两者功能相同，区别只在 OpenAPI 文档：`Security` 会把认证方式登记进安全方案，让 `/docs` 里出现那把锁的图标。你在这篇文章的截图里可以看到 `AUTHORIZATIONS: APIKeyHeader` 就是这个的产物。
+
+而六个不同的 Header 参数，意味着**同一个依赖统一处理了六种供应商的认证习惯**——OpenAI 的、Azure 的、Anthropic 的……全都收敛到一个函数里。
+
+### 两种用法，同一个依赖
+
+拿到这个依赖后，路由有两种消费方式。litellm 里两种都在用（`proxy_server.py` 第 10597 行附近）：
+
+```python
+# 用法 A：只要"执行过"，不要返回值
+@router.get("/v1/models", dependencies=[Depends(user_api_key_auth)])
+async def models_list():
+    ...
+
+# 用法 B：需要拿到认证结果
+@router.get("/models")
+async def models(user_api_key_dict: UserAPIKeyAuth = Depends(user_api_key_auth)):
+    # user_api_key_dict 里带着密钥所属的团队、预算、权限
+    ...
+```
+
+**用法 A** 是"守门员"模式：请求没带合法密钥就直接被拦下，路由函数根本不会执行。适合纯权限控制。
+**用法 B** 是"情报员"模式：除了验证，还要把认证结果带进业务逻辑。
+
+![依赖注入的解析过程](/images/blog/fastapi-dependency-injection.png)
+
+### 三个容易被忽略的机制
+
+**① 依赖可以嵌套**
+
+被注入的函数本身也可以声明依赖，FastAPI 会自动按顺序解析。这是构建复杂权限体系的基础：
+
+```python
+def get_current_user(token: TokenDep) -> User: ...          # 解析 token
+def get_admin_user(user: CurrentUser) -> User: ...          # 依赖上面的结果
+CurrentAdmin = Annotated[User, Depends(get_admin_user)]     # 再包一层给路由用
+```
+
+**② 同一次请求内，依赖只会被调用一次**
+
+如果路由函数和它依赖的服务都声明了 `Depends(get_db)`，FastAPI 不会调用两次数据库会话工厂——两个参数拿到的是**同一个对象**。这个缓存机制叫 `use_cache`，默认开启。
+
+想关掉也有办法：`Depends(get_db, use_cache=False)`，用于那些"每次都需要新实例"的场景。
+
+**③ `yield` 依赖：最优雅的资源管理**
+
+```python
+def get_db() -> Generator[Session]:
+    db = Session(engine)
+    try:
+        yield db          # 交给路由函数使用
+    finally:
+        db.close()        # 无论成功还是异常，都会执行
+```
+
+`yield` 之前的代码在路由执行前运行，之后的代码在**响应返回后**运行——包括路由抛异常的情况。这正是"每个请求一个数据库会话，用完自动归还"的标准实现。
+
+官方模板把它和类型别名结合，形成了很干净的写法：
+
+```python
+SessionDep = Annotated[Session, Depends(get_db)]
+
+@router.get("/items/")
+def read_items(session: SessionDep) -> list[Item]:   # 参数类型即依赖声明
+    ...
+```
+
+**④ `scope`：控制 yield 依赖的结束时机**
+
+这是一个较新、较少被提及的参数。带 `yield` 的依赖默认在**响应发送给客户端之后**才收尾（`scope="request"`）；如果你想让资源在路由函数结束时就释放、不等响应传输，可以声明 `scope="function"`。对于"用完就要归还的连接"这类资源，这个区别在流式响应场景下是有实际影响的。
+
+---
+
+## 五、Pydantic：把类型注解变成校验规则
+
+FastAPI 的自动校验和自动文档，全部来自 Pydantic。它的魔法只有一句话：**你写的是类型注解，Pydantic 把它变成运行时行为**。
+
+### 真实的请求模型
+
+litellm 的管理端点里有大量 Pydantic 模型，写法很典型：
+
+```python
+class CacheTestRequest(BaseModel):
+    cache_settings: dict[str, object] = Field(description="Cache settings to test connection with")
+
+class CacheTestResponse(BaseModel):
+    status: str = Field(description="Connection status: 'success' or 'failed'")
+    message: str = Field(description="Connection result message")
+    error: str | None = Field(default=None, description="Error message if connection failed")
+```
+
+三件事同时发生了：
+
+1. **校验**：请求体缺 `cache_settings` 返回 422，不是 500
+2. **文档**：`Field(description=...)` 直接变成 API 文档里的字段说明
+3. **类型转换**：`error: str | None = None` 意味着可选，且默认值是 `None`
+
+### 用 Literal 收窄取值范围
+
+比 `Field` 更实用的约束是 `Literal`——它把"枚举"表达进了类型系统：
+
+```python
+fallback_type: Literal["general", "context_window", "content_policy"] = "general"
+user_role: Literal["user", "admin"] = "user"
+```
+
+传一个不在列表里的值，Pydantic 直接拒绝，并生成清晰的错误信息。对比一下手写校验：
+
+```python
+# ❌ 校验逻辑散落在函数体里，文档里也看不出来
+if role not in ("teacher", "student"):
+    return {"status": "error", "message": "invalid role"}
+
+# ✅ 类型即约束，自动校验 + 自动进文档
+role: Literal["teacher", "student"] = "student"
+```
+
+**把约束写进类型，是 FastAPI 项目里最高杠杆的重构之一。** 它同时改善了三件事：运行时正确性、文档完整性、以及读代码的人的认知负担。
+
+### 响应模型：装饰器上的三件套
+
+litellm 的路由装饰器很能说明问题：
+
+```python
+@router.get(
+    "/cache/settings",
+    tags=["Cache Settings"],                      # 文档分组
+    dependencies=[Depends(user_api_key_auth)],    # 认证
+    response_model=CacheSettingsResponse,         # 出参结构
+)
+async def get_cache_settings(
+    user_api_key_dict: UserAPIKeyAuth = Depends(user_api_key_auth),
+):
+```
+
+`response_model` 不只是文档标注，它会在返回前**按模型过滤掉多余的字段**——这是防止"不小心把数据库里的密码字段返回给前端"的最有效手段。
+
+### 一个诚实的观察
+
+不是所有项目都会把 Pydantic 用到极致。litellm 有个明显的取舍：它的**核心调用链（chat/completions）刻意避开了 Pydantic**，改用 `TypedDict` + 自研的 dict 子类对象。
+
+原因不难理解——它要兼容 OpenAI SDK 的使用习惯（用户传 dict、拿 dict），强类型模型反而成了负担。代价是：**这部分端点的 OpenAPI schema 很弱，校验也少**。
+
+这提醒我们：**Pydantic 不是必须的，它是一个权衡**。对外部契约稳定的内部服务，强类型收益极大；对"透传型"代理，保持动态反而更合适。
+
+---
+
+## 六、路由分层：一个 19169 行的单文件教会我的事
+
+### 先看事实
+
+`litellm/proxy/proxy_server.py` 有 **19,169 行、803 KB**。
+
+这个数字第一次看到时我愣住了。作为对比，同一项目里的 `litellm/router.py` 是 672 KB，`litellm/utils.py` 是 426 KB。
+
+### 原因：它同时做了两件事
+
+拆开看，这个文件里有：
+
+- `app = FastAPI(...)` 的创建（第 1502 行）
+- lifespan 定义（第 1079 行）
+- 异常处理器（1663、1715、1792、1815 行）
+- 中间件注册（2179～2220 行）
+- 几十个路由定义
+
+其中 **53 处 `include_router`** 说明作者其实做了模块化——路由被拆进了 `management_endpoints/`、`llm_api_routes/` 等目录。但主文件依然是"总装车间"，随着兼容层、适配逻辑、历史包袱不断堆积，最终膨胀成了 19,169 行。
+
+### 代价是什么
+
+大文件不只是"看着累"，它有真实的工程成本：
+
+**① 定位困难**。想找 `/health` 端点的实现，你得先知道它在 1702 行还是 9000 行。
+
+**② 死代码难以察觉**。我在阅读源码时注意到一个细节：某些端点在文件里被定义了两次，FastAPI **按注册顺序匹配，后注册的那份永远不会被执行**。在几千行的文件里，这种重复定义很难被 review 发现——多 worker 拆分文件后，这类问题会立刻暴露。
+
+**③ 合并冲突频繁**。任何两个人同时改这个文件，冲突概率接近 100%。
+
+### 正确的分层方式
+
+FastAPI 提供的工具是 `APIRouter`——按领域拆分，最后统一挂载：
+
+```python
+# app/api/routes/users.py
+router = APIRouter(prefix="/users", tags=["users"])
+
+@router.get("/{user_id}")
+async def get_user(user_id: int): ...
+
+# app/main.py —— 总装
+from app.api.routes import users, items, login
+
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(items.router, prefix="/api/v1")
+app.include_router(login.router, prefix="/api/v1")
+```
+
+`include_router` 支持统一加 `prefix`、`tags`、`dependencies`——这意味着**一整组接口可以共享认证策略**，而不必在每个函数上重复声明。
+
+顺带一个值得抄的技巧：官方模板用 `tags` 去生成 OpenAPI 的 `operationId`：
+
+```python
+def custom_generate_unique_id(route: APIRoute) -> str:
+    return f"{route.tags[0]}-{route.name}"
+```
+
+这样生成的前端 TypeScript 客户端，方法名会是 `items-read_items` 这种可读形式，而不是一堆随机字符串。
+
+**litellm 的单文件不是反面教材，而是一份真实世界的时间账单**——它告诉你，一个 58k star 的项目也会在迭代中积累技术债，而 FastAPI 恰好提供了足够好的工具（`APIRouter`）让你不必如此。
+
+---
+
+## 七、流式响应：LLM 场景的核心能力
+
+### 为什么是 SSE 而不是 WebSocket
+
+大模型的输出是**逐 token 生成**的。用户等 10 秒看到完整回答，和一边生成一边显示，体验天差地别。
+
+这里有个常见的技术选型错误：**一提到"实时"就上 WebSocket**。但 LLM 输出的本质是**单向下行流**——服务端推、客户端收，不需要双向通信。这正好是 SSE（Server-Sent Events）的设计目标。
+
+| | SSE | WebSocket |
+|---|---|---|
+| 通信方向 | 单向（服务端→客户端） | 双向 |
+| 协议 | 普通 HTTP | 需要协议升级握手 |
+| 穿透代理/CDN | 好（就是 HTTP） | 可能被拦截 |
+| 断线重连 | 浏览器原生支持 | 需要自己实现 |
+| 适用场景 | **LLM 流式输出**、进度推送 | 聊天室、协同编辑、实时游戏 |
+
+OpenAI、Anthropic、DeepSeek 的流式 API 用的都是 SSE。litellm 作为网关，必须原样透传这个语义。
+
+### 在 FastAPI 里怎么做
+
+litellm 的实现在 `proxy_server.py` 第 11221 行附近：
+
+```python
+_streaming_response = litellm.CustomStreamWrapper(
+    completion_stream=_iterator,
+    model=e.model,
+    custom_llm_provider="cached_response",
+    logging_obj=_logging_obj,
+)
+selected_data_generator = select_data_generator(
+    response=_streaming_response,
+    user_api_key_dict=user_api_key_dict,
+    request_data=_data,
+    request=request,
+)
+
+return StreamingResponse(
+    selected_data_generator,
+    media_type="text/event-stream",     # 关键：SSE 的 MIME 类型
+    status_code=200,
+)
+```
+
+`StreamingResponse` 接受一个**异步生成器**，框架会边产出边推送给客户端，而不是等全部生成完再一次性返回：
+
+![流式响应的时序](/images/blog/fastapi-streaming-sse.png)
+
+最小可用版本其实很简单：
+
+```python
+async def event_stream():
+    async for chunk in upstream_stream():
+        yield f"data: {json.dumps(chunk)}\n\n"    # SSE 格式：data: + 内容 + 两个换行
+    yield "data: [DONE]\n\n"
+
+@app.post("/v1/chat/completions")
+async def chat(req: ChatRequest):
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+```
+
+### 流式场景下的两个坑
+
+**① 反向代理会缓冲你的响应**
+
+Nginx 默认会缓冲上游响应，导致"服务端明明在流式输出，用户却等了 10 秒一次性收到全部内容"。必须在 Nginx 配置里关掉：
+
+```nginx
+location /v1/ {
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_set_header X-Accel-Buffering no;   # 给 Nginx 的明确信号
+}
+```
+
+**② 客户端断连时要停止上游计算**
+
+用户在生成到一半时关掉页面，如果服务端继续把剩下的 token 生成完，就是纯粹的算力浪费。异步生成器在被取消时会抛出 `CancelledError`，你可以在里面捕获并中止上游：
+
+```python
+async def event_stream():
+    try:
+        async for chunk in upstream_stream():
+            yield chunk
+    except asyncio.CancelledError:
+        await upstream.aclose()     # 客户端断了，别算了
+        raise
+```
+
+---
+
+## 八、中间件：顺序比功能更容易出错
+
+### litellm 的中间件栈
+
+`proxy_server.py` 第 2179 行开始，注册了这样一串中间件：
+
+```python
+app.add_middleware(CORSMiddleware, allow_origins=origins, ...)
+app.add_middleware(PrometheusAuthMiddleware)
+app.add_middleware(BillableRequestMetricsMiddleware, ...)
+app.add_middleware(InFlightRequestsMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+```
+
+它们各司其职：CORS 处理跨域、Prometheus 保护指标端点、计费统计、追踪在途请求、注入安全响应头。
+
+### 一个反直觉的规则
+
+**Starlette 里，最后 `add_middleware` 的，在最外层。**
+
+源码里就是一行 `insert(0, ...)`——新中间件插到列表头部，构建时最先被包装，于是成为最外层。所以上面代码的请求流经顺序是：
+
+![中间件栈的执行顺序](/images/blog/fastapi-middleware-stack.png)
+
+这个规则的重要性，litellm 的源码注释讲得比我清楚（原文翻译）：
+
+> `BillableRequestMetricsMiddleware` 放在 `InFlightRequestsMiddleware` **之前**添加，是为了让它嵌套在**内层**：Starlette 让最后添加的中间件处于最外层。计费计数是在内层应用返回**之后**记录的，如果它位于在途请求追踪器的外层，那么一个请求可能在 `record()` 还没执行时就被判定为"已结束"，导致关闭流程提前冲刷并停掉指标导出器。
+
+这就是生产代码里的真实推理。**中间件顺序错了往往不会报错，只会让数据悄悄出错**——这比崩溃难查得多。
+
+### 另一条注释揭示的坑
+
+同一段代码里还有一个细节：`BillableRequestMetricsMiddleware` 的参数传的是 **lambda 工厂函数**，而不是实例。注释解释：
+
+> 用工厂而非实例：recorder 在**第一个请求**到来时才解析，这样它能读到 `proxy_startup_event` 加载 YAML 配置环境变量**之后**的 `premium_user` 状态。如果在导入时就构建，对于通过 YAML 配置的部署，会永久捕获到 `recorder=None`。
+
+这暴露了中间件的一个结构性限制：**`add_middleware` 在模块导入期执行，早于 lifespan**。任何"启动之后才知道"的配置，都必须延迟到第一次请求时解析。
+
+### 依赖 vs 中间件：该怎么选
+
+新手常纠结"这段逻辑该放中间件还是依赖"。经验法则：
+
+| 需求 | 用什么 | 原因 |
+|---|---|---|
+| 跨域、压缩、安全头 | 中间件 | 对所有请求无差别生效，与业务无关 |
+| 请求耗时统计、日志 | 中间件 | 需要包裹完整生命周期 |
+| **权限校验** | **依赖** | 粒度到路由，且要在文档里体现 |
+| 数据库会话 | `yield` 依赖 | 需要精确的获取与释放边界 |
+
+**权限校验为什么不该用中间件？** 因为中间件是全局的，你没法优雅地表达"这个路由需要管理员、那个路由公开"。用依赖，你可以精确到单个路由：
+
+```python
+@router.get("/admin/stats", dependencies=[Depends(require_admin)])
+async def stats(): ...
+```
+
+而 litellm 的做法是把认证写成依赖（`user_api_key_auth`），130 处按需引用——既精确又灵活。
+
+---
+
+## 九、跑起来：从零到一个可用的网关
+
+前面都是读代码。这一节我们把它真正跑起来——下面的每一步都是我实际执行过的，包括踩到的坑。
+
+### 环境准备
+
+litellm 需要 Python 3.9+。用独立虚拟环境，避免污染全局：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install "litellm[proxy]"
+```
+
+验证安装：
+
+```bash
+litellm --version
+# LiteLLM: Current Version = 1.100.1
+```
+
+### 写一个最小配置
+
+新建 `config.yaml`：
+
+```yaml
+model_list:
+  - model_name: gpt-4o-mini          # 对外暴露的名字，客户端用这个名字调用
+    litellm_params:
+      model: openai/gpt-4o-mini      # 真实上游模型，provider/model 格式
+      api_key: os.environ/OPENAI_API_KEY    # 从环境变量读，不硬编码
+
+  - model_name: deepseek-chat
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 2
+
+general_settings:
+  master_key: sk-1234                # 本地演示用；生产请从环境变量注入
+```
+
+三个要点：
+
+- **`model_name` 和 `model` 是两回事**：前者是你自定义的对外名字，后者是真实的上游模型。这层映射是网关存在的基础。
+- **`api_key: os.environ/XXX`** 让密钥走环境变量注入——这是配置文件的正确姿势，永远不要把真实 key 写进 YAML。
+- **多个部署可以共用同一个 `model_name`**，litellm 会自动做负载均衡和故障降级。
+
+### 启动
+
+```bash
+litellm --config config.yaml --port 4000
+```
+
+看到这几行就成功了：
+
+```
+LiteLLM: Proxy initialized with Config, Set models:
+    gpt-4o-mini
+    deepseek-chat
+```
+
+### 验证：依赖注入真的在保护接口
+
+**不带密钥请求**（预期被拒）：
+
+```bash
+curl -i http://127.0.0.1:4000/v1/models
+```
+
+```json
+{"error":{"message":"Authentication Error, No api key passed in.",
+          "type":"auth_error","param":"None","code":"401"}}
+```
+
+HTTP 状态码 **401**——`user_api_key_auth` 这个依赖在路由函数执行之前就把请求拦下了，这正是第四章讲的"用法 A"。
+
+**带上 master_key**：
+
+```bash
+curl http://127.0.0.1:4000/v1/models \
+  -H "Authorization: Bearer sk-1234"
+```
+
+```json
+{"data":[
+  {"id":"gpt-4o-mini","object":"model","created":1677610602,"owned_by":"openai",...},
+  {"id":"deepseek-chat","object":"model","created":1677610602,"owned_by":"openai",...}
+],"object":"list"}
+```
+
+模型列表出来了，说明配置加载正常。
+
+### 看自动生成的 API 文档
+
+访问 `http://127.0.0.1:4000/redoc`：
+
+![litellm 自动生成的 API 文档](/images/blog/litellm-api-docs.png)
+
+这张截图值得细看。左侧是自动按 `tags` 分组的端点列表（model management、chat/completions、embeddings、audio……），右侧是每个端点的参数说明，中间标着 **`AUTHORIZATIONS: APIKeyHeader`**。
+
+**这份文档没有一行是手写的。** 它完全由 Pydantic 模型和路由装饰器推导而来——这是 FastAPI 最划算的特性：文档永远和实现同步，因为它就是实现推导出来的。
+
+顺带一个实测发现：访问 `/docs` 返回 404。litellm 关掉了 FastAPI 默认的 Swagger UI（还记得第二章 `docs_url=_get_docs_url()` 那行吗），只保留 ReDoc。对网关来说这是合理的安全默认值——**减少暴露面**。
+
+管理界面在 `http://127.0.0.1:4000/ui/`，进入需要认证：
+
+![LiteLLM 管理界面需要密钥登录](/images/blog/litellm-dashboard.png)
+
+### 两个真实的坑
+
+**坑一：Windows 下中文注释会让配置读取失败**
+
+第一次启动时我得到了这样一串报错：
+
+```
+UnicodeDecodeError: 'gbk' codec can't decode byte 0x80 in position 18
+```
+
+原因：litellm 读取 YAML 时用了系统默认编码，Windows 中文环境默认是 GBK，而我的配置文件是 UTF-8 且有中文注释。**解决办法**：配置文件用纯 ASCII 写，或启动时强制 UTF-8：
+
+```bash
+PYTHONUTF8=1 litellm --config config.yaml --port 4000
+```
+
+**坑二：认证失败返回 500 而不是 401**
+
+这是更有意思的一个。我第一次测试"不带密钥"时，得到的不是 401，而是：
+
+```json
+{"error":{"message":"Internal server error","type":"internal_server_error"}}
+```
+
+一个认证失败返回 500，会让客户端误以为服务端崩了，从而触发重试逻辑——问题被放大。
+
+翻服务端日志才发现真实原因：
+
+```
+File ".../litellm/proxy/auth/auth_exception_handler.py", line 186,
+    if PrismaDBExceptionHandler.is_database_service_unavailable_error(e):
+File ".../litellm/proxy/db/exception_handler.py", line 82,
+    import prisma
+ModuleNotFoundError: No module named 'prisma'
+```
+
+也就是说：**认证失败后，litellm 的异常兜底逻辑会去判断"这是不是数据库不可用导致的"，而这一步需要 import prisma。我的轻量演示环境没装数据库客户端，于是 import 失败，异常处理器自己抛了异常，最终被最外层的兜底处理器包成了 500。**
+
+装上 `pip install prisma` 之后，认证失败立刻恢复成标准的 **401**。
+
+这个坑的价值在于它揭示了**异常处理链路的脆弱性**：你的错误处理代码本身也是代码，它同样可能失败。litellm 的兜底处理器在 import 失败时没有做防御，于是把一个清晰的 401 变成了误导性的 500。
+
+在生产项目里，这意味着：**异常处理器内部要极力避免新的失败点**，尤其是不能依赖可能缺失的可选包。
+
+### 生产部署：多 worker 与全局状态的矛盾
+
+`proxy_cli.py` 显示 litellm 支持两种服务器：
+
+```python
+uvicorn.run(**uvicorn_args, workers=num_workers)   # 默认 workers=1
+# 或
+ProxyInitializationHelpers._run_gunicorn_server(..., max_requests_before_restart=...)
+```
+
+但有个限制值得注意：**进程内状态无法跨 worker 共享**。litellm 的限流、缓存、在途请求追踪都需要在多个 worker 之间保持一致，所以它必须引入外部存储：
+
+- **Postgres**：密钥、用户、预算、用量记录
+- **Redis**：限流计数、路由状态、缓存
+
+官方 `docker-compose.yml` 就是这套组合：
+
+```yaml
+services:
+  litellm:
+    image: docker.litellm.ai/berriai/litellm:main-stable
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: "postgresql://llmproxy:{{DB_PASSWORD}}@db:5432/litellm"
+      STORE_MODEL_IN_DB: "True"
+    depends_on:
+      - db
+  db:
+    image: postgres:16
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+```
+
+> 说明：上面这份配置来自 litellm 仓库的官方文件，但我**没有在本地验证过**——本文的实测环境没有安装 Docker，实操部分走的是 pip 直跑路线。如果你要用 Docker 部署，请以上游最新文档为准。
+
+**这就是"单进程 vs 可扩展"的经典权衡**：状态放在进程内最简单，但无法水平扩展；一旦要上多副本，就必须把所有共享状态外置。FastAPI 本身不解决这个问题——它只是让你能很方便地在 lifespan 里连接外部存储。
+
+---
+
+## 十、边界：什么时候不该用 FastAPI
+
+读源码的另一个收获是看清一个工具的边界。litellm 的代码里，有几个地方明确告诉我们 FastAPI **不擅长什么**。
+
+**① CPU 密集型任务**
+
+FastAPI 的异步优势建立在 I/O 密集的前提上。如果你的接口主要在做图像处理、大矩阵运算、模型推理，`async def` 帮不上忙——**阻塞事件循环的后果比同步框架更严重**（整个进程的所有请求一起卡住）。
+
+正确做法是丢进线程/进程池：
+
+```python
+@app.post("/heavy")
+async def heavy(data: Data):
+    # 不要直接算，放到线程池，给事件循环让路
+    result = await asyncio.to_thread(compute_intensive_task, data)
+    return result
+```
+
+**② 需要极低延迟的内部 RPC**
+
+HTTP + JSON 的序列化开销在服务间高频调用时不可忽略。gRPC 或消息队列可能更合适。litellm 作为对外网关用 HTTP 是对的，但如果是内部微服务之间，就未必。
+
+**③ 团队不熟悉异步**
+
+`async def` 里混进一行同步阻塞调用（比如 `requests.get()`、`time.sleep()`），就会拖垮整个服务，而且**压测时不一定能发现**（单请求测试完全正常），上了生产才暴露。
+
+不过 FastAPI 在这里有个很贴心的设计：**用 `def` 定义的同步路由会被自动放进线程池执行**，不会阻塞事件循环。所以"不确定该用哪个"时的安全选择是：**同步库就用 `def`，异步库才用 `async def`**。不要盲目加 `async`。
+
+**④ 需要极致吞吐的简单转发**
+
+如果你的服务只是把请求原样转发，Go/Rust 写的网关在资源占用上会低一个数量级——这也是 litellm 正在把核心迁往 Rust 的原因。
+
+---
+
+## 十一、总结
+
+把 litellm 拆完，FastAPI 的样子清晰了很多。几个我认为最值得记住的点：
+
+**关于结构**
+
+- FastAPI = **Starlette**（ASGI、路由、中间件）+ **Pydantic**（校验、序列化）+ 一层粘合剂。理解这个分层，就知道每个 API 到底是谁提供的
+- `lifespan` 用来管理**和应用同生命周期**的资源（连接池、数据库客户端）；数据库迁移这类部署动作，不该放在这里
+
+**关于依赖注入**
+
+- `Depends` 是 FastAPI 最强大的特性：**把横切关注点从业务逻辑里彻底剥离**
+- `dependencies=[...]` 只要执行，参数注入要结果——同一机制的两种用法
+- `yield` 依赖保证资源无论成功失败都能释放；同一次请求内依赖会被缓存复用
+- 认证用 `Security` 而不是 `Depends`，这样认证方式会出现在 API 文档里
+
+**关于数据校验**
+
+- 把约束写进类型（`Literal`、`Field`），校验、文档、可读性三件事同时改善
+- `response_model` 不只是文档，它会在返回前过滤掉多余字段
+- 但 Pydantic 是权衡而非教条——透传型代理保持动态反而更合适
+
+**关于路由与中间件**
+
+- 用 `APIRouter` 按领域拆分；litellm 的 19,169 行单文件是真实世界的时间账单
+- **中间件顺序是"最后添加的在最外层"**，顺序错了不报错，只会让数据悄悄出错
+- 权限该用依赖而不是中间件——因为依赖能精确到路由，还能进文档
+
+**关于生产**
+
+- 流式输出用 **SSE 而不是 WebSocket**（LLM 是单向下行流）
+- 多 worker 部署时，所有共享状态都必须外置到 Postgres / Redis
+- **异常处理器本身也会失败**，它不该依赖可能缺失的包——那个把 401 变成 500 的坑就是教训
+- 写 `async def` 之前先问：这个函数里的调用，真的都是异步的吗？
+
+最后回到开头那个问题——"为什么同步函数不会阻塞服务"。现在你应该能答上来了：因为 FastAPI 会把它丢进线程池，而这是 Starlette 提供的能力，不是魔法。
+
+框架用起来简单，是因为有人把复杂度藏在了你看不见的地方。读源码的意义，就是把这些地方翻出来看一眼。
+
+---
+
+*本文基于 litellm v1.100.1 源码（2026-09-14 抓取），行号与代码片段均来自该版本。文中所有实测结论来自 Windows + Python 3.12 + litellm 1.100.1 的本地运行环境。*
+
+*相关阅读：[Python 异步编程入门指南](/blog/python-async-guide)——那篇讲的是异步的"地基"，这篇讲的是建立在它之上的"建筑"。*

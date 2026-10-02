@@ -77,7 +77,7 @@ src/
 │   ├── yijing/                  # 周易工具组件 (爻选择器/排盘/AI解卦)
 │   └── vocabulary/             # 词汇工具专属组件
 ├── content/
-│   ├── posts/                  # .mdx 文章文件 (13 篇)
+│   ├── posts/                  # .mdx 文章文件 (19 篇)
 │   └── projects.ts            # 项目数据 (静态数组)
 ├── lib/
 │   ├── auth/route-auth.ts      # 共享 HMAC auth (signToken/verifyToken)
@@ -193,6 +193,17 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 
 当前 Nginx 特殊处理路径：`/projects`、`/blog`、`/tools`（含所有子路径如 `/tools/ticket`、`/tools/hermes` 等）均已配置缓存剥离。静态资源 `/hermes/` 和 `/_next/static` 走独立 location 块，无需剥离。
 
+**⚠️ 改 Nginx 只算完成一半——还必须同步 cloudflared ingress（最容易漏）：**
+
+cloudflared 的 ingress（`/home/ubuntu/.cloudflared/config.yml`）是**白名单式路径路由**：只有显式列出的 `path` 才转发到 nginx(80)，**其余一切落到默认规则 `http://localhost:3000`，直连 Next.js 从而绕过 Nginx**。所以新增任何需要 Nginx 处理的路径（下载目录、静态资源目录等）必须**同时改两处**：
+
+1. `/etc/nginx/sites-enabled/myblogger` — 加对应 `location`（**80 和 443 两个 server 块都要加**）
+2. `/home/ubuntu/.cloudflared/config.yml` — 加 `path: /xxx/*` → `service: http://localhost:80`（`merrain.cn` 与 `www.merrain.cn` 各一条，放在 catch-all 默认规则之前），改完执行 `sudo systemctl restart cloudflared`（隧道中断约 5 秒）
+
+**漏改 cloudflared 的症状**：请求返回 **308（去掉尾斜杠）→ 404**——这是 Next.js `trailingSlash: false` 的默认行为，看到 308 即说明请求根本没到 Nginx。`path` 的 `*` 可跨目录层级，`/xxx/*` 能匹配子目录文件。
+
+**另注**：`/etc/nginx/sites-enabled/` 是实体文件目录（不是软链）且被 `include sites-enabled/*` 通配加载，**不要把 `.bak` 备份放进去**，否则会被当成第二个站点加载并产生 `conflicting server name` 警告；备份请放 `sites-available/` 或 `/tmp`。
+
 ## 车票生成器
 
 ### 架构
@@ -232,6 +243,17 @@ iframe (public/gomoku/index.html) ← postMessage → React 父组件 ← WebSoc
 |------|------|------|
 | myblogger | `npm start` (next start) | 3000 |
 | ws-gomoku | `npx tsx server/ws-server.ts` | 3001 |
+
+**⚠️ 服务器上并存两套 PM2 daemon，务必用 `ubuntu` 用户操作：**
+
+| 归属 | 管理的进程 | 查看命令 |
+|------|-----------|---------|
+| **ubuntu（正主）** | myblogger(3000)、ws-gomoku(3001) | `sudo -u ubuntu -H bash -lc 'pm2 list'` |
+| root | ncm-api（网易云音乐 API，与本项目无关） | `sudo pm2 list` |
+
+以 root 执行 `pm2 start myblogger` 会因 3000 端口已被 ubuntu 侧的正主占用而 `errored` 并无限重启（曾把 CPU 烧到 69%、拖慢整机），且 `pm2 save` 会把坏进程写进 `/root/.pm2/dump.pm2`，下次重启原样复活。SSH 登录用户即 `ubuntu`，登录后直接 `pm2 xxx` 就是正确的 daemon。
+
+**该机器为多人共用**：另有同事的 `/var/www/hackathon/` 项目、Docker、ncm-api 等。2026-10-02 曾因同事的 `pdfplumber` PDF 解析脚本吃光内存触发 OOM，连带杀死 sshd/nginx/cloudflared 导致全站不可访问（Cloudflare 1033）。**重任务不要放在这台 2核2G 机器上跑**，跑前先看 `free -m` 余量。
 
 ### 部署流程
 

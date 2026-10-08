@@ -88,6 +88,20 @@ def save(fig, name):
     print(f'  [OK] {name}')
 
 
+def quantize(name, colors=256):
+    """把已生成的 PNG 量化到调色板模式以压体积（博客约定要求图表 < 300KB）。
+
+    用于热力图这类渐变多、PNG 偏大的图；256 色对本站图表视觉无损。
+    """
+    from PIL import Image
+    path = os.path.join(OUTPUT_DIR, name)
+    before = os.path.getsize(path)
+    img = Image.open(path).convert('RGB')
+    img.quantize(colors=colors, method=Image.MEDIANCUT,
+                 dither=Image.NONE).save(path, optimize=True)
+    print(f'  [OK] {name} 量化：{before // 1024}KB → {os.path.getsize(path) // 1024}KB')
+
+
 # ============================================================
 # 图 1: Transformer 整体架构
 # ============================================================
@@ -404,7 +418,12 @@ def create_positional_encoding():
                  'PE(pos, 2i+1) = cos(pos / 10000^(2i/d))',
                  fontsize=11, color=C['text_light'], y=0.97)
 
+    fig.text(0.5, 0.008,
+             '示意：为便于观察条纹结构，此处把 d_model 缩小为 64 展示（原论文 base 模型为 512）',
+             ha='center', fontsize=9, color=C['text_muted'])
+
     save(fig, 'positional-encoding.png')
+    quantize('positional-encoding.png')
 
 
 # ============================================================
@@ -473,6 +492,10 @@ def create_complexity_comparison():
     ax2.set_xlim(0.7, N * 4)
     ax2.grid(alpha=0.25, linestyle='--', axis='x')
     ax2.tick_params(labelsize=9)
+
+    fig.text(0.5, 0.004,
+             '数据来源：《Attention Is All You Need》(arXiv:1706.03762) Table 1',
+             ha='center', fontsize=8.5, color=C['text_muted'])
 
     fig.tight_layout()
     save(fig, 'attention-complexity-comparison.png')

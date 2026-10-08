@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Transformer 九年演进 · 手绘图解</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.6;
+  background:var(--paper);max-width:960px;margin:0 auto;padding:32px 40px 34px;
+}
+.cover-head{text-align:center;margin-bottom:6px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1.2px}
+h1 .dot{color:#7C3AED}
+.sub-en{font-family:"Caveat",cursive;font-size:24px;color:var(--ink2);margin-top:1px}
+.pnote{font-size:11px;color:var(--ink2);text-align:center;line-height:1.55;margin-top:6px}
+
+/* 时间轴 + 四阶段 */
+.phases{position:relative;display:flex;gap:9px;margin-top:30px}
+.phases::before{content:"";position:absolute;left:2.5%;right:2.5%;top:5px;
+  height:2px;background:#CFCAC0;z-index:0}
+.phase{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;
+  position:relative;color:#2563EB}
+.phase.p2{color:#D97706} .phase.p3{color:#7C3AED} .phase.p4{color:#16A34A}
+.axisrow{height:12px;display:flex;align-items:center;position:relative;z-index:2}
+.nd{width:12px;height:12px;border-radius:50%;background:currentColor;
+  box-shadow:0 0 0 2.4px var(--paper),0 0 0 3.8px currentColor}
+.yr{font-family:"Caveat",cursive;font-size:17.5px;font-weight:600;color:currentColor;
+  margin:2px 0 0}
+.ph-title{font-family:"ZCOOL KuaiLe",sans-serif;font-size:14.5px;color:var(--ink);
+  margin:1px 0 8px;text-align:center}
+
+.card{position:relative;width:100%;border-radius:9px;background:#fff;
+  box-shadow:2px 2px 0 #333;padding:9px 8px;display:flex;flex-direction:column;
+  flex:1 1 auto}
+.card::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:9px 12px 9px 11px;filter:url(#wobble);pointer-events:none}
+
+.item{position:relative;border-radius:6px;padding:4px 8px;margin-bottom:5px;
+  font-size:11px;line-height:1.5;background:#DBEAFE}
+.item:last-child{margin-bottom:8px}
+.item::after{content:"";position:absolute;inset:-1px;border:1.3px solid #333;
+  border-radius:6px 9px 6px 8px;filter:url(#wobble);pointer-events:none}
+.item.lead{font-weight:700}
+.item .y{font-family:Consolas,monospace;font-size:10.5px;color:#5a5a5a}
+.p2 .item{background:#FFEDD5} .p3 .item{background:#F3E8FF} .p4 .item{background:#DCFCE7}
+
+.resp{position:relative;width:100%;margin-top:auto;border-radius:7px;padding:5px 9px;
+  font-size:11px;line-height:1.5;background:#fff;box-shadow:2px 2px 0 #333;
+  border:1.4px dashed currentColor;text-align:center;color:#3f3f3f}
+.resp b{color:currentColor}
+
+.capsule{
+  margin-top:16px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="cover-head">
+  <h1>Transformer 九年演进 <span class="dot">·</span> 手绘图解</h1>
+  <div class="sub-en">nine years, four phases</div>
+</div>
+<div class="pnote">四个阶段在时间上相互重叠、逐层叠加 —— 节点按阶段顺序排列，并非严格的时间刻度。</div>
+
+<div class="phases">
+  <div class="phase p1">
+    <div class="axisrow"><span class="nd"></span></div>
+    <div class="yr">2018 — 2020</div>
+    <div class="ph-title">拆解成三种形态</div>
+    <div class="card">
+      <div class="item">BERT <span class="y">2018</span> · Encoder-only · MLM</div>
+      <div class="item">GPT <span class="y">2018</span> / GPT-3 <span class="y">2020</span> · Decoder-only</div>
+      <div class="item">T5 <span class="y">2019</span> · Encoder-Decoder · Span 去噪</div>
+      <div class="resp">回应：<b>Encoder / Decoder 分工是否冗余</b></div>
+    </div>
+  </div>
+
+  <div class="phase p2">
+    <div class="axisrow"><span class="nd"></span></div>
+    <div class="yr">2020 — 2023</div>
+    <div class="ph-title">效率之战</div>
+    <div class="card">
+      <div class="item">Longformer <span class="y">2020</span> · 稀疏 / 线性注意力</div>
+      <div class="item">FlashAttention <span class="y">2022</span> · IO 感知 · 快 3~5×</div>
+      <div class="item">GQA / MQA <span class="y">2023</span> · 共享一组 K / V</div>
+      <div class="resp">回应：<b>O(n²) 的账单到了要还的时候</b></div>
+    </div>
+  </div>
+
+  <div class="phase p3">
+    <div class="axisrow"><span class="nd"></span></div>
+    <div class="yr">2021 — 2024</div>
+    <div class="ph-title">位置编码重写</div>
+    <div class="card">
+      <div class="item">RoPE <span class="y">2021</span> · 旋转 · 只依赖相对距离</div>
+      <div class="item">ALiBi <span class="y">2021</span> · 线性偏置 · 强外推</div>
+      <div class="item">YaRN / 插值 <span class="y">2023</span> · 4K → 32K+</div>
+      <div class="resp">回应：<b>正弦编码一旦外推就失效</b></div>
+    </div>
+  </div>
+
+  <div class="phase p4">
+    <div class="axisrow"><span class="nd"></span></div>
+    <div class="yr">2025 —</div>
+    <div class="ph-title">架构被重新提问</div>
+    <div class="card">
+      <div class="item">Transformer 能力上限之问 <span class="y">2026</span></div>
+      <div class="item">Mobius · 知识池与推理解耦</div>
+      <div class="item lead">跨模态支线：ViT <span class="y">2020</span> · 16×16 patch</div>
+      <div class="resp">回应：<b>注意力负责推理，知识放哪里</b></div>
+    </div>
+  </div>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">每一阶段都在回答前一阶段暴露的短板 —— 更长、更快，以及知识到底该存在哪里</span>
+</div>
+</body>
+</html>

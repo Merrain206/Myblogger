@@ -255,6 +255,9 @@ def create_emergence_curves():
                  color=C['text'], pad=12)
 
     plt.tight_layout(pad=0.5)
+    fig.text(0.5, -0.035,
+             '示意：曲线为定性示意，用于说明「量变引起质变」；各能力的实际涌现阈值与陡峭程度因模型而异',
+             ha='center', fontsize=8.5, color=C['text_muted'])
     out = os.path.join(OUTPUT_DIR, 'emergence-curves.png')
     fig.savefig(out, dpi=150, bbox_inches='tight', facecolor=C['bg'], edgecolor='none')
     plt.close(fig)

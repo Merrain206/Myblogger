@@ -9,6 +9,7 @@
 图 4  正弦位置编码（真实公式计算）
 图 5  Self-Attention / RNN / CNN 复杂度与路径长度对比（真实公式计算）
 图 6  Multi-Head 子空间分解（示意）
+图 7  Transformer 九年演进时间线（对应正文 §7）
 """
 import matplotlib
 matplotlib.use('Agg')
@@ -661,6 +662,91 @@ def create_attention_heatmap():
     save(fig, 'attention-heatmap.png')
 
 
+def create_evolution_timeline():
+    """图 7  Transformer 九年演进：四阶段时间线（对应正文 §7）。"""
+    phases = [
+        ('2018 — 2020', '拆解成三种形态',
+         ['BERT · Encoder-only · MLM',
+          'GPT / GPT-3 · Decoder-only',
+          'T5 · Encoder-Decoder · Span 去噪'],
+         '回应：Encoder / Decoder 分工是否冗余',
+         C['enc_bg'], C['enc_border'], C['accent_blue']),
+        ('2020 — 2023', '效率之战',
+         ['稀疏 / 线性注意力（Longformer…）',
+          'FlashAttention · IO 感知 · 快 3~5×',
+          'GQA / MQA · 共享一组 K/V'],
+         '回应：O(n²) 的账单到了要还的时候',
+         C['dec_bg'], C['dec_border'], C['accent_orange']),
+        ('2021 — 2024', '位置编码重写',
+         ['RoPE · 旋转 · 只依赖相对距离',
+          'ALiBi · 线性偏置 · 强外推',
+          'YaRN / 插值 · 4K → 32K+'],
+         '回应：正弦编码一旦外推就失效',
+         C['attn_bg'], C['attn_border'], C['accent_purple']),
+        ('2025 —', '架构被重新提问',
+         ['ViT · 16×16 patch · 跨模态',
+          'Transformer 能力上限之问',
+          'Mobius · 知识池与推理解耦'],
+         '回应：注意力负责推理，知识放哪里',
+         C['ffn_bg'], C['ffn_border'], C['accent_green']),
+    ]
+
+    fig, ax = plt.subplots(figsize=(13.5, 7.3))
+    fig.patch.set_facecolor(C['bg'])
+    ax.set_facecolor(C['bg'])
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 100)
+    ax.axis('off')
+
+    ax.text(50, 95.5, 'Transformer 九年演进：2018 → 2026',
+            ha='center', va='center', fontsize=18, fontweight='bold',
+            color=C['text'])
+
+    ax.plot([4, 96], [86.5, 86.5], color=C['divider'], lw=2.2, zorder=1)
+
+    col_w, gap, x0 = 21.7, 1.4, 2.6
+    for i, (years, title, items, resp, bg, bd, ac) in enumerate(phases):
+        x = x0 + i * (col_w + gap)
+        cx = x + col_w / 2
+
+        # 时间轴节点 + 年份
+        ax.plot([cx], [86.5], marker='o', markersize=9,
+                markerfacecolor=bd, markeredgecolor='white',
+                markeredgewidth=1.6, zorder=3)
+        ax.text(cx, 89.9, years, ha='center', va='center',
+                fontsize=11, fontweight='bold', color=ac)
+
+        # 阶段大卡片
+        card_y, card_h = 34.0, 40.0
+        rounded_box(ax, x, card_y, col_w, card_h, bg, bd, lw=1.5, pad=0.5)
+
+        ax.text(cx, card_y + card_h - 4.6, title, ha='center', va='center',
+                fontsize=12, fontweight='bold', color=ac, zorder=3)
+
+        # 技术条目
+        ty = card_y + card_h - 13.0
+        for it in items:
+            rounded_box(ax, x + 1.6, ty - 2.45, col_w - 3.2, 4.9,
+                        'white', bd, lw=1.0, pad=0.28, z=3)
+            ax.text(x + 2.9, ty, it, ha='left', va='center',
+                    fontsize=7.9, color=C['text'], zorder=4)
+            ty -= 8.3
+
+        # 底部"回应"行（虚线框）
+        ax.add_patch(FancyBboxPatch((x, 21.0), col_w, 7.5,
+                     boxstyle="round,pad=0.4", facecolor='white',
+                     edgecolor=bd, linewidth=1.1, zorder=3, linestyle='--'))
+        ax.text(cx, 24.75, resp, ha='center', va='center',
+                fontsize=8.4, color=ac, zorder=4, style='italic')
+
+    ax.text(50, 12.5,
+            '每一阶段都在回答前一阶段暴露的短板 —— 更长、更快，'
+            '以及知识到底该存在哪里',
+            ha='center', va='center', fontsize=10, color=C['text_light'])
+
+    save(fig, 'transformer-evolution-timeline.png')
+
+
 if __name__ == '__main__':
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print('生成 Transformer 文章配图：')
@@ -670,4 +756,5 @@ if __name__ == '__main__':
     create_complexity_comparison()
     create_multi_head()
     create_attention_heatmap()
+    create_evolution_timeline()
     print('完成。')

@@ -23,6 +23,9 @@ h1 .dot{color:#7C3AED}
   padding-left:11px;border-left:4px solid #333}
 .sec .en{font-family:"Caveat",cursive;font-size:15px;color:var(--ink2);margin-left:7px}
 
+.hint{font-size:11px;color:#6b6b6b;line-height:1.55;margin:0 0 8px;padding-left:11px}
+.hint b{color:#333}
+
 .box{
   position:relative;border-radius:8px;padding:8px 10px;text-align:center;
   font-size:12.5px;font-weight:600;background:#fff;box-shadow:2px 2px 0 #333;
@@ -100,6 +103,7 @@ h1 .dot{color:#7C3AED}
 </div>
 
 <div class="sec">① 把 d_model 切成 8 份，每份独立做注意力<span class="en">split &amp; attend</span></div>
+<div class="hint">右侧模式标签为<b>示意</b>：每个头实际学到什么由训练动态决定，原论文只观察到「头之间发生分化」，并未给各头指派固定功能。</div>
 <div class="flow">
   <div class="left">
     <div class="box">X<span class="dim">n × 512</span></div>
@@ -114,7 +118,7 @@ h1 .dot{color:#7C3AED}
     <div class="head b2"><span class="no">Head 2</span><span class="dk">d_k = 64</span><span class="mode">代词指代</span></div>
     <div class="head b3"><span class="no">Head 3</span><span class="dk">d_k = 64</span><span class="mode">局部搭配</span></div>
     <div class="head b4"><span class="no">Head 4</span><span class="dk">d_k = 64</span><span class="mode">语义角色</span></div>
-    <div class="head b5"><span class="no">Head 5</span><span class="dk">d_k = 64</span><span class="mode">时态一致</span></div>
+    <div class="head b5"><span class="no">Head 5</span><span class="dk">d_k = 64</span><span class="mode">时态呼应</span></div>
     <div class="head b6"><span class="no">Head 6</span><span class="dk">d_k = 64</span><span class="mode">位置邻近</span></div>
     <div class="head b7"><span class="no">Head 7</span><span class="dk">d_k = 64</span><span class="mode">词形变化</span></div>
     <div class="head b8"><span class="no">Head 8</span><span class="dk">d_k = 64</span><span class="mode">领域实体</span></div>

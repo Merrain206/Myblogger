@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DSpark 推测解码</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --draft:#EFEDE6; --draft-d:#6B7280;
+  --ok:#DCFCE7;    --ok-d:#059669;
+  --bad:#FBE5D6;   --bad-d:#C2410C;
+  --main:#DBEAFE;  --main-d:#2563EB;
+  --warn:#FEF3C7;  --warn-d:#B45309;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.55;
+  background:var(--paper);max-width:900px;margin:0 auto;padding:30px 38px 32px;
+}
+.head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1px}
+h1 .dot{color:var(--main-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:23px;color:var(--ink2);margin-top:1px}
+
+.steps{display:flex;gap:10px;margin-bottom:16px}
+.step{
+  flex:1 1 0;position:relative;border-radius:8px;padding:8px 8px 9px;background:#ffffff9c;
+  text-align:center;
+}
+.step::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:8px 11px 7px 10px;filter:url(#wobble);pointer-events:none}
+.step .n{
+  font-family:"Caveat",cursive;font-size:19px;color:#888;display:block;line-height:1;
+}
+.step .t{font-size:12.2px;font-weight:600;display:block;margin-top:2px}
+.step .s{font-size:10.4px;color:#666;display:block;margin-top:1px}
+.step.one{background:#f3f4f6a8}
+.step.two{background:#eff6ffa8}
+.step.three{background:#f0fdf4a8}
+.step.four{background:#fff7eda8}
+.step .conn{
+  position:absolute;right:-12px;top:50%;transform:translateY(-50%);
+  font-size:17px;font-weight:700;color:#B45309;z-index:2;
+}
+
+.timeline{
+  position:relative;border-radius:10px;padding:14px 16px 16px;background:#ffffff9c;
+}
+.timeline::after{content:"";position:absolute;inset:-1px;border:2px solid #333;
+  border-radius:10px 14px 9px 13px;filter:url(#wobble);pointer-events:none}
+.tl-title{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.tl-title .t{font-family:"ZCOOL KuaiLe",sans-serif;font-size:16px}
+.tl-title .en{font-family:"Caveat",cursive;font-size:16px;color:var(--ink2)}
+.tl-title .note{margin-left:auto;font-size:10.6px;color:#666}
+
+.lane{display:flex;align-items:center;gap:8px;margin:8px 0}
+.lane .lab{
+  flex:0 0 92px;font-size:11.3px;color:#555;text-align:right;line-height:1.35;
+}
+.lane .lab b{display:block;font-size:12px;color:#333}
+.toks{display:flex;gap:5px;flex:1}
+.tok{
+  flex:1;height:34px;border-radius:6px;border:1.5px solid #333;background:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:11.5px;font-weight:600;position:relative;
+}
+.tok .sub{font-size:9px;font-weight:400;color:#666}
+.tok.d{background:var(--draft);border-style:dashed}
+.tok.v{background:var(--main)}
+.tok.ok{background:var(--ok);border-color:var(--ok-d)}
+.tok.bad{background:var(--bad);border-color:var(--bad-d);opacity:.85}
+.tok .mark{
+  position:absolute;right:-5px;top:-8px;width:17px;height:17px;border-radius:50%;
+  border:1.3px solid #333;background:#fff;font-size:10px;line-height:15px;text-align:center;
+}
+.tok.ok .mark{background:var(--ok);color:var(--ok-d);border-color:var(--ok-d)}
+.tok.bad .mark{background:var(--bad);color:var(--bad-d);border-color:var(--bad-d)}
+.tok.pad{background:transparent;border:none;box-shadow:none}
+.dots{flex:0 0 22px;text-align:center;color:#888;font-size:14px}
+
+.decision{
+  margin-top:13px;display:flex;gap:14px;align-items:stretch;
+}
+.decision .half{
+  flex:1;position:relative;border-radius:8px;padding:9px 12px;background:#fafaf7;
+}
+.decision .half::after{content:"";position:absolute;inset:-1px;border:1.6px dashed #999;
+  border-radius:8px 11px 7px 10px;pointer-events:none}
+.decision .half .h{font-size:11.8px;font-weight:600;margin-bottom:2px}
+.decision .half .b{font-size:10.8px;color:#666;line-height:1.5}
+.decision .half.hi .h{color:var(--ok-d)}
+.decision .half.lo .h{color:var(--bad-d)}
+
+.conf{
+  margin-top:14px;position:relative;border-radius:9px;padding:10px 14px;background:var(--warn);
+  display:flex;align-items:center;gap:12px;box-shadow:2.2px 2.2px 0 #333;
+}
+.conf::after{content:"";position:absolute;inset:-1px;border:1.7px solid #333;
+  border-radius:9px 13px 8px 12px;filter:url(#wobble);pointer-events:none}
+.conf .k{font-family:"ZCOOL KuaiLe",sans-serif;font-size:13.5px;color:var(--warn-d);white-space:nowrap}
+.conf .v{font-size:11.6px;color:#4b3a20;line-height:1.5}
+
+.capsule{
+  margin-top:16px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.3px;color:#3a3a3a}
+.src{margin-top:9px;text-align:center;font-size:10.3px;color:#8a8a8a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="head">
+  <h1>DSpark <span class="dot">·</span> 推测解码</h1>
+  <div class="sub-en">guess a few tokens, verify them in one pass</div>
+</div>
+
+<div class="steps">
+  <div class="step one">
+    <span class="n">1</span>
+    <span class="t">草稿</span>
+    <span class="s">一次猜出 k 个候选</span>
+    <span class="conn">→</span>
+  </div>
+  <div class="step two">
+    <span class="n">2</span>
+    <span class="t">验证</span>
+    <span class="s">主模型一次前向</span>
+    <span class="conn">→</span>
+  </div>
+  <div class="step three">
+    <span class="n">3</span>
+    <span class="t">判定</span>
+    <span class="s">接受最长合法前缀</span>
+    <span class="conn">→</span>
+  </div>
+  <div class="step four">
+    <span class="n">4</span>
+    <span class="t">回退</span>
+    <span class="s">从拒绝处继续</span>
+  </div>
+</div>
+
+<div class="timeline">
+  <div class="tl-title">
+    <span class="t">一次 Decode 步骤</span>
+    <span class="en">draft → verify → accept / reject</span>
+    <span class="note">默认草稿长度 = 5</span>
+  </div>
+
+  <div class="lane">
+    <div class="lab"><b>草稿模型</b>便宜 · 快</div>
+    <div class="toks">
+      <span class="tok d">候选 1<span class="sub">draft</span></span>
+      <span class="tok d">候选 2<span class="sub">draft</span></span>
+      <span class="tok d">候选 3<span class="sub">draft</span></span>
+      <span class="tok d">候选 4<span class="sub">draft</span></span>
+      <span class="tok d">候选 5<span class="sub">draft</span></span>
+    </div>
+    <span class="dots">…</span>
+  </div>
+
+  <div class="lane">
+    <div class="lab"><b>主模型</b>一次并行验证</div>
+    <div class="toks">
+      <span class="tok v">验证<span class="sub">pass</span></span>
+      <span class="tok v">验证<span class="sub">pass</span></span>
+      <span class="tok v">验证<span class="sub">pass</span></span>
+      <span class="tok v">验证<span class="sub">pass</span></span>
+      <span class="tok v">验证<span class="sub">pass</span></span>
+    </div>
+    <span class="dots">…</span>
+  </div>
+
+  <div class="lane">
+    <div class="lab"><b>判定结果</b>接受前缀</div>
+    <div class="toks">
+      <span class="tok ok">接受<span class="sub">token 1</span><span class="mark">✓</span></span>
+      <span class="tok ok">接受<span class="sub">token 2</span><span class="mark">✓</span></span>
+      <span class="tok ok">接受<span class="sub">token 3</span><span class="mark">✓</span></span>
+      <span class="tok bad">拒绝<span class="sub">token 4</span><span class="mark">×</span></span>
+      <span class="tok bad">丢弃<span class="sub">token 5</span><span class="mark">−</span></span>
+    </div>
+    <span class="dots">…</span>
+  </div>
+</div>
+
+<div class="decision">
+  <div class="half hi">
+    <div class="h">接受率高 → 赚</div>
+    <div class="b">代码补全、结构化抽取、格式化输出：下一个 Token 可预测，一次验证能产出多个 Token。</div>
+  </div>
+  <div class="half lo">
+    <div class="h">接受率低 → 亏</div>
+    <div class="b">开放写作、创意生成：草稿频繁被拒，验证算力白费，还可能拖慢响应。</div>
+  </div>
+</div>
+
+<div class="conf">
+  <span class="k">置信度调度</span>
+  <span class="v">DSpark 用置信度估计决定「这次要不要投机、草稿多长、何时验证」，而不是对所有请求一律开猜。</span>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">默认草稿 5 个；生产吞吐提升约 4%~7%，先基线再 A/B</span>
+</div>
+<div class="src">机制依据 DeepInfer README；吞吐数字来自 DeepSeek 公开披露与媒体转述</div>
+</body>
+</html>

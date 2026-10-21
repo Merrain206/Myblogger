@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Prefill / Decode 与前缀缓存</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --pre:#DBEAFE;  --pre-d:#2563EB;
+  --dec:#F3E8FF;  --dec-d:#7C3AED;
+  --hit:#DCFCE7;  --hit-d:#059669;
+  --miss:#FFEDD5; --miss-d:#C2410C;
+  --band:#FEF3C7; --band-d:#B45309;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.55;
+  background:var(--paper);max-width:900px;margin:0 auto;padding:30px 38px 32px;
+}
+.head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1px}
+h1 .dot{color:var(--band-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:23px;color:var(--ink2);margin-top:1px}
+
+.compare{display:flex;gap:22px;align-items:stretch}
+.card{
+  flex:1 1 0;position:relative;border-radius:10px;padding:13px 15px 14px;background:#ffffffb8;
+}
+.card::after{content:"";position:absolute;inset:-1px;border:2px solid #333;
+  border-radius:10px 14px 9px 13px;filter:url(#wobble);pointer-events:none}
+.card.pre{background:#eff6ff9c}
+.card.dec{background:#faf5ff9c}
+.card h2{font-family:"ZCOOL KuaiLe",sans-serif;font-size:18px;font-weight:400;text-align:center}
+.card .en{font-family:"Caveat",cursive;font-size:17px;color:var(--ink2);text-align:center;margin-bottom:8px}
+.row{display:flex;gap:8px;font-size:11.8px;margin:5px 0;align-items:flex-start}
+.row .k{flex:0 0 58px;color:#666}
+.row .v{flex:1;font-weight:600}
+.pill{
+  display:inline-block;font-size:10.5px;font-weight:400;border-radius:999px;
+  padding:0 7px;margin:1px 3px 1px 0;border:1.3px solid #333;background:#fff;
+}
+.card.pre .pill{border-color:var(--pre-d);color:var(--pre-d)}
+.card.dec .pill{border-color:var(--dec-d);color:var(--dec-d)}
+
+.band{
+  margin:16px 0 0;position:relative;border-radius:9px;padding:10px 14px;
+  background:var(--band);display:flex;align-items:center;justify-content:center;gap:12px;
+  box-shadow:2.2px 2.2px 0 #333;
+}
+.band::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:9px 13px 8px 12px;filter:url(#wobble);pointer-events:none}
+.band .lbl{font-family:"ZCOOL KuaiLe",sans-serif;font-size:13.5px;color:var(--band-d);white-space:nowrap}
+.band .node{font-size:11.8px;background:#fff;border:1.4px solid #333;border-radius:6px;padding:3px 9px;white-space:nowrap}
+.band .link{font-size:12px;color:#666;white-space:nowrap}
+.band .hint{
+  position:absolute;right:8px;top:-11px;background:var(--paper);color:#9a3412;
+  font-size:10.4px;padding:0 7px;border:1.3px dashed var(--miss-d);border-radius:999px;
+}
+
+.cache{
+  margin-top:16px;position:relative;border-radius:10px;padding:13px 15px 15px;background:#ffffff9c;
+}
+.cache::after{content:"";position:absolute;inset:-1px;border:2px solid #333;
+  border-radius:10px 14px 9px 13px;filter:url(#wobble);pointer-events:none}
+.cache-title{
+  display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;
+}
+.cache-title .t{font-family:"ZCOOL KuaiLe",sans-serif;font-size:16px}
+.cache-title .t .en{font-family:"Caveat",cursive;font-size:16px;color:var(--ink2);margin-left:6px}
+.rate{font-family:"Caveat",cursive;font-size:23px;color:var(--hit-d)}
+.rate b{font-family:"ZCOOL KuaiLe",sans-serif;font-size:15px;font-weight:400;color:#3f6212}
+
+.reqline{display:flex;align-items:center;gap:7px;margin:7px 0}
+.reqline .no{flex:0 0 44px;font-size:11px;color:#666;text-align:right}
+.toks{display:flex;gap:3px;flex:1;flex-wrap:nowrap}
+.tok{
+  height:25px;flex:1;border-radius:5px;border:1.4px solid #333;position:relative;
+  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;
+}
+.tok.h{background:var(--hit)}
+.tok.m{background:var(--miss)}
+.tok.new{background:#fff;border-style:dashed;color:#888;font-weight:400}
+.tok.out{background:#F3E8FF;border-color:#7C3AED}
+.tag{
+  flex:0 0 auto;font-size:10.5px;padding:1px 7px;border-radius:999px;
+  border:1.3px dashed var(--hit-d);color:#3f6212;background:#fff;
+}
+.tag.gen{border-color:var(--miss-d);color:#9a3412}
+
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 16px;margin:13px 0 0}
+.legend span{display:flex;align-items:center;gap:5px;font-size:11.3px;color:#444}
+.swatch{width:13px;height:13px;border:1.4px solid #333;border-radius:4px;display:inline-block}
+.swatch.dash{background:#fff;border-style:dashed}
+
+.capsule{
+  margin-top:16px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.3px;color:#3a3a3a}
+.src{margin-top:9px;text-align:center;font-size:10.3px;color:#8a8a8a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="head">
+  <h1>Prefill / Decode <span class="dot">·</span> 与前缀缓存</h1>
+  <div class="sub-en">two workloads, one cache that pays for everything</div>
+</div>
+
+<div class="compare">
+  <div class="card pre">
+    <h2>Prefill · 预填充</h2>
+    <div class="en">read the whole prompt at once</div>
+    <div class="row"><span class="k">处理对象</span><span class="v">整段输入 Prompt</span></div>
+    <div class="row"><span class="k">瓶颈</span><span class="v">GPU 算力（FLOPS）</span></div>
+    <div class="row"><span class="k">关键指标</span><span class="v">TTFT · 首 Token 延迟</span></div>
+    <div class="row"><span class="k">并行方式</span><span class="v"><span class="pill">张量并行</span><span class="pill">上下文并行</span></span></div>
+  </div>
+
+  <div class="card dec">
+    <h2>Decode · 解码</h2>
+    <div class="en">emit one token at a time</div>
+    <div class="row"><span class="k">处理对象</span><span class="v">每次 1 个输出 Token</span></div>
+    <div class="row"><span class="k">瓶颈</span><span class="v">显存带宽（搬权重 + KV）</span></div>
+    <div class="row"><span class="k">关键指标</span><span class="v">TPOT · 每 Token 时间</span></div>
+    <div class="row"><span class="k">并行方式</span><span class="v"><span class="pill">数据并行</span><span class="pill">专家并行</span></span></div>
+  </div>
+</div>
+
+<div class="band">
+  <span class="hint">服务层需自建</span>
+  <span class="lbl">PD 分离</span>
+  <span class="node">Prefill 节点 · 8 卡</span>
+  <span class="link">── KV 传输 →</span>
+  <span class="node">Decode 超节点 · 64~128 卡</span>
+</div>
+
+<div class="cache">
+  <div class="cache-title">
+    <div class="t">前缀缓存<span class="en">same prefix, reuse the KV</span></div>
+    <div class="rate"><b>命中率约</b> 96%</div>
+  </div>
+
+  <div class="reqline">
+    <span class="no">请求 1</span>
+    <div class="toks">
+      <span class="tok h">系统提示</span><span class="tok h">工具定义</span><span class="tok h">历史轮次</span><span class="tok m">新输入</span><span class="tok out">生成</span>
+    </div>
+    <span class="tag">前缀命中</span>
+  </div>
+  <div class="reqline">
+    <span class="no">请求 2</span>
+    <div class="toks">
+      <span class="tok h">系统提示</span><span class="tok h">工具定义</span><span class="tok h">历史轮次</span><span class="tok m">新输入</span><span class="tok out">生成</span>
+    </div>
+    <span class="tag">前缀命中</span>
+  </div>
+  <div class="reqline">
+    <span class="no">请求 3</span>
+    <div class="toks">
+      <span class="tok h">系统提示</span><span class="tok h">工具定义</span><span class="tok new">前缀不一致</span><span class="tok m">整段重算</span><span class="tok out">生成</span>
+    </div>
+    <span class="tag gen">全部 miss</span>
+  </div>
+</div>
+
+<div class="legend">
+  <span><i class="swatch" style="background:var(--hit)"></i>命中缓存 · 直接复用</span>
+  <span><i class="swatch" style="background:var(--miss)"></i>需要 Prefill 计算</span>
+  <span><i class="swatch" style="background:#F3E8FF"></i>Decode 生成</span>
+  <span><i class="swatch dash"></i>前缀不一致 · 无法复用</span>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">把稳定的内容放前面；缓存命中比任何单点优化都省钱</span>
+</div>
+<div class="src">命中率与 PD 配置为 DeepSeek 公开披露、媒体转述，非开源仓库可复现数据</div>
+</body>
+</html>

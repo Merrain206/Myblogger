@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DeepInfer 推理栈 · 开源边界</title>
+<style>
+__FONTFACE__
+:root{
+  --paper:#FDFBF7; --ink:#2D2D2D; --ink2:#7A7A7A;
+  --oss:#DCFCE7;   --oss-d:#059669;
+  --proto:#DBEAFE; --proto-d:#2563EB;
+  --engine:#FEF3C7;--engine-d:#B45309;
+  --hw:#EFEDE6;    --hw-d:#6B7280;
+  --miss:#FBE5D6;  --miss-d:#C2410C;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#EFEDE6}
+body{
+  font-family:"Microsoft YaHei",sans-serif;color:var(--ink);line-height:1.55;
+  background:var(--paper);max-width:900px;margin:0 auto;padding:30px 38px 32px;
+}
+.head{text-align:center;margin-bottom:16px}
+h1{font-family:"ZCOOL KuaiLe",sans-serif;font-size:30px;font-weight:400;letter-spacing:1px}
+h1 .dot{color:var(--engine-d)}
+.sub-en{font-family:"Caveat",cursive;font-size:23px;color:var(--ink2);margin-top:1px}
+
+.cols{display:flex;gap:24px;align-items:stretch}
+.col{flex:1 1 0;min-width:0}
+.col.oss{flex:1.45 1 0}
+.col-label{
+  font-family:"ZCOOL KuaiLe",sans-serif;font-size:16px;text-align:center;
+  padding:2px 0 8px;letter-spacing:.5px;
+}
+.col-label.own{color:#3f6212}
+.col-label.build{color:#9a3412}
+
+.stage{position:relative;border-radius:10px;padding:14px 14px 16px;background:#ffffff9c}
+.stage::after{content:"";position:absolute;inset:-1px;border:2px solid #333;
+  border-radius:10px 14px 9px 13px;filter:url(#wobble);pointer-events:none}
+.stage.dashed{background:#fff7ed8c;display:flex;flex-direction:column;gap:11px;justify-content:center}
+.stage.dashed::after{border:2px dashed var(--miss-d);border-radius:9px 13px 10px 12px}
+
+.box{
+  position:relative;border-radius:7px;padding:8px 10px;text-align:center;
+  font-size:13px;font-weight:600;background:#fff;box-shadow:2px 2px 0 #333;
+}
+.box::after{content:"";position:absolute;inset:-1px;border:1.6px solid #333;
+  border-radius:7px 10px 7px 9px;filter:url(#wobble);pointer-events:none}
+.box .name{display:block}
+.box .sub{display:block;font-size:10.8px;font-weight:400;color:#555;margin-top:2px}
+.box .badge{
+  position:absolute;right:-9px;top:-9px;font-family:"Caveat",cursive;font-size:15px;
+  background:#fff;border:1.4px solid #333;border-radius:999px;padding:0 8px;
+  box-shadow:1.5px 1.5px 0 #333;color:#333;
+}
+.box .badge.blue{color:var(--proto-d)}
+
+.req{background:#F3E8FF}
+.proto{background:var(--proto)}
+.engine{background:var(--engine);padding-bottom:10px}
+.hw{background:var(--hw)}
+.hw .sub{font-size:10.5px}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:7px 0 5px}
+.grid span{
+  font-size:11px;font-weight:400;background:#ffffff9c;border:1.3px dashed var(--engine-d);
+  border-radius:5px;padding:2px 4px;
+}
+.arrow{text-align:center;font-size:17px;line-height:18px;color:#555;margin:1px 0}
+.arrow b{font-weight:400}
+
+.lock{background:var(--miss)}
+.lock .sub{color:#7c2d12}
+
+.build-tag{
+  position:absolute;left:10px;top:-11px;background:var(--paper);
+  font-family:"ZCOOL KuaiLe",sans-serif;font-size:12px;color:#9a3412;
+  padding:0 8px;border-radius:999px;border:1.4px dashed var(--miss-d);
+}
+.note{
+  margin-top:3px;text-align:center;font-size:11.4px;color:#7c2d12;line-height:1.6;
+  background:#fff;border:1.3px dashed #C2410C;border-radius:6px;padding:6px 8px;
+}
+
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 16px;margin:14px 0 0}
+.legend span{display:flex;align-items:center;gap:5px;font-size:11.5px;color:#444}
+.swatch{width:13px;height:13px;border:1.4px solid #333;border-radius:4px;display:inline-block}
+.swatch.dash{border:1.4px dashed #C2410C;background:#fff}
+
+.capsule{
+  margin-top:16px;display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 22px;background:#F9F1D2;border-radius:999px;
+  box-shadow:2.5px 2.5px 0 #333;position:relative;
+}
+.capsule::after{content:"";position:absolute;inset:-1px;border:1.8px solid #333;
+  border-radius:999px;filter:url(#wobble);pointer-events:none}
+.capsule .lbl{font-family:"Caveat",cursive;font-size:20px;color:#B45309}
+.capsule .txt{font-size:12.5px;color:#3a3a3a}
+.src{margin-top:9px;text-align:center;font-size:10.3px;color:#8a8a8a}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="wobble">
+    <feTurbulence type="fractalNoise" baseFrequency="0.009 0.014" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="6.5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="head">
+  <h1>DeepInfer 推理栈 <span class="dot">·</span> 开源边界</h1>
+  <div class="sub-en">what you get, and what you still have to build</div>
+</div>
+
+<div class="cols">
+  <div class="col oss">
+    <div class="col-label own">本次开源 · 引擎与协议</div>
+    <div class="stage">
+      <div class="box req">
+        <span class="name">客户端请求</span>
+        <span class="sub">Messages · Chat Completions · Responses</span>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="box proto">
+        <span class="name">deepseek-recipe</span>
+        <span class="sub">协议转换 · Prompt 渲染 · Token 编解码</span>
+        <span class="badge">MIT</span>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="box engine">
+        <span class="name">DeepInfer 引擎</span>
+        <div class="grid">
+          <span>批调度</span><span>并行策略</span>
+          <span>融合算子</span><span>采样与约束</span>
+        </div>
+        <span class="sub">推测解码 · SWA 重放 · 结构化输出</span>
+        <span class="badge blue">Apache 2.0</span>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="box hw">
+        <span class="name">硬件后端</span>
+        <span class="sub">NVIDIA SM100 · CUDA 13　｜　Ascend 950 · CANN 9.2</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col miss">
+    <div class="col-label build">需自行补齐 · 服务层</div>
+    <div class="stage dashed">
+      <span class="build-tag">未开源</span>
+      <div class="box lock">
+        <span class="name">KV Cache 系统</span>
+        <span class="sub">跨请求复用 · 淘汰策略 · 3FS 存储</span>
+      </div>
+      <div class="box lock">
+        <span class="name">PD 分离编排</span>
+        <span class="sub">Prefill 与 Decode 分开部署</span>
+      </div>
+      <div class="box lock">
+        <span class="name">跨 DP 负载均衡</span>
+        <span class="sub">按副本空闲度分发请求</span>
+      </div>
+      <div class="note">缺了这三块，<br>跑得动 ≠ 服务得了</div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span><i class="swatch" style="background:#F3E8FF"></i>请求入口</span>
+  <span><i class="swatch" style="background:var(--proto)"></i>协议层</span>
+  <span><i class="swatch" style="background:var(--engine)"></i>推理引擎</span>
+  <span><i class="swatch" style="background:var(--hw)"></i>硬件</span>
+  <span><i class="swatch dash"></i>需自建</span>
+</div>
+
+<div class="capsule">
+  <span class="lbl">in short</span>
+  <span class="txt">开源的是发动机；油箱、调度台和车队管理，得自己造</span>
+</div>
+<div class="src">依据 DeepInfer / deepseek-recipe 官方 README（2026-10）</div>
+</body>
+</html>

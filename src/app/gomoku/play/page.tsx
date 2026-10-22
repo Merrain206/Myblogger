@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { GameResult } from "@/lib/gomoku/types";
 
@@ -11,19 +11,24 @@ function PlayContent() {
   const difficulty = (searchParams.get("difficulty") || "medium") as "easy" | "medium" | "hard";
 
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
-  const [playerName, setPlayerName] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   // 监听来自 iframe 的游戏结果
   const handleMessage = useCallback((e: MessageEvent) => {
-    if (e.data?.type === "gomoku-result") {
+    if (e.origin !== window.location.origin || e.source !== iframeRef.current?.contentWindow) return;
+    const data = e.data as Record<string, unknown> | null;
+    if (data?.type === "gomoku-result"
+      && data.mode === "pvai"
+      && ["easy", "medium", "hard"].includes(String(data.difficulty))
+      && ["win", "loss", "draw"].includes(String(data.result))
+      && Number.isSafeInteger(data.moves)
+      && Number(data.moves) >= 1
+      && Number(data.moves) <= 225) {
       setGameResult({
-        mode: e.data.mode,
-        difficulty: e.data.difficulty,
-        result: e.data.result,
-        moves: e.data.moves,
+        mode: "pvai",
+        difficulty: data.difficulty as "easy" | "medium" | "hard",
+        result: data.result as "win" | "loss" | "draw",
+        moves: Number(data.moves),
       });
     }
   }, []);
@@ -32,36 +37,6 @@ function PlayContent() {
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, [handleMessage]);
-
-  const submitScore = async () => {
-    const name = playerName.trim();
-    if (!name) { setError("请输入昵称"); return; }
-    setSubmitting(true);
-    setError("");
-
-    try {
-      const res = await fetch("/api/gomoku/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          playerName: name,
-          mode: gameResult!.mode,
-          difficulty: gameResult!.difficulty,
-          result: gameResult!.result,
-          moves: gameResult!.moves,
-        }),
-      });
-      if (res.ok) {
-        setSubmitted(true);
-      } else {
-        const data = await res.json();
-        setError(data.error || "提交失败");
-      }
-    } catch {
-      setError("网络错误，请重试");
-    }
-    setSubmitting(false);
-  };
 
   const gameUrl = `/gomoku/index.html?mode=${mode}&difficulty=${difficulty}`;
 
@@ -93,6 +68,7 @@ function PlayContent() {
       {/* 游戏 iframe */}
       <div className="flex justify-center">
         <iframe
+          ref={iframeRef}
           src={gameUrl}
           className="rounded-xl border border-slate-200 dark:border-slate-700"
           style={{ width: "100%", maxWidth: "660px", height: "780px" }}
@@ -100,65 +76,31 @@ function PlayContent() {
         />
       </div>
 
-      {/* 成绩提交弹窗 */}
-      {gameResult && !submitted && (
+      {/* 人机结果只在本地展示，不进入可信在线排行榜。 */}
+      {gameResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+          <div className="mx-4 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl dark:border-slate-700 dark:bg-slate-800">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 text-center mb-2">
               {gameResult.result === "win" ? "恭喜获胜！" : gameResult.result === "loss" ? "遗憾落败" : "握手言和"}
             </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-4">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
               共 {gameResult.moves} 手
             </p>
-
-            <input
-              type="text"
-              value={playerName}
-              onChange={(e) => { setPlayerName(e.target.value); setError(""); }}
-              placeholder="输入你的昵称"
-              maxLength={20}
-              className="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-              onKeyDown={(e) => e.key === "Enter" && submitScore()}
-            />
-            {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
-
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              人机对局由浏览器运行，仅作为练习记录，不进入可信在线排行榜。
+            </p>
             <div className="flex gap-3 mt-4">
               <button
                 onClick={() => setGameResult(null)}
                 className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700"
               >
-                跳过
-              </button>
-              <button
-                onClick={submitScore}
-                disabled={submitting}
-                className="flex-1 rounded-lg bg-primary-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-600 disabled:opacity-50"
-              >
-                {submitting ? "提交中..." : "提交成绩"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 提交成功 */}
-      {submitted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl dark:border-slate-700 dark:bg-slate-800">
-            <p className="text-2xl mb-2">&#x2705;</p>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">成绩已提交！</h3>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => { setGameResult(null); setSubmitted(false); }}
-                className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700"
-              >
                 继续下棋
               </button>
               <button
-                onClick={() => router.push("/gomoku/leaderboard")}
-                className="flex-1 rounded-lg bg-primary-500 py-2.5 text-sm font-semibold text-white hover:bg-primary-600"
+                onClick={() => router.push("/gomoku")}
+                className="flex-1 rounded-lg bg-primary-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-600 disabled:opacity-50"
               >
-                查看排行
+                返回大厅
               </button>
             </div>
           </div>

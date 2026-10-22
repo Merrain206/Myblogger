@@ -310,6 +310,12 @@ let onlineMyTurn = false;    // online 模式下是否轮到本玩家
 let onlineRole = null;       // 'guest1' | 'guest2' | null
 let onlineRoomId = null;     // 'A' | 'B' | null
 
+function postToParent(message) {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage(message, window.location.origin);
+  }
+}
+
 const DIFFICULTY_DEPTH = { easy: 0, medium: 4, hard: 6 };
 const DIFFICULTY_NOISE = { easy: 4, medium: 0, hard: 0 }; // top-N random pick (easy only)
 
@@ -775,9 +781,7 @@ function placePiece(row, col) {
   // 在线模式：发送落子给父页面（WebSocket 转发给服务器）
   if (gameMode === 'online') {
     try {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'gomoku-move', row, col }, '*');
-      }
+      postToParent({ type: 'gomoku-move', row, col });
     } catch (_) {}
     onlineMyTurn = false; // 落子后禁止己方继续操作，等待对手回应
     return doPlacePiece(row, col, currentPlayer);
@@ -803,9 +807,7 @@ function undo() {
     if (gameOver) return;
     if (history.length === 0) return;
     try {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'gomoku-request-undo' }, '*');
-      }
+      postToParent({ type: 'gomoku-request-undo' });
     } catch (_) {}
     return;
   }
@@ -826,9 +828,7 @@ function reset() {
   // 在线模式：发送 rematch 请求走服务器协商流程
   if (gameMode === 'online') {
     try {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'gomoku-request-rematch' }, '*');
-      }
+      postToParent({ type: 'gomoku-request-rematch' });
     } catch (_) {}
     return;
   }
@@ -873,7 +873,7 @@ function notifyParent() {
           result: winner === null ? 'draw' : (winner === BLACK ? 'win' : 'loss'),
           moves: history.length,
         };
-        window.parent.postMessage({ type: 'gomoku-result', ...result }, '*');
+        postToParent({ type: 'gomoku-result', ...result });
       }
     } catch (_) { /* 不在 iframe 中则忽略 */ }
   }
@@ -1063,11 +1063,19 @@ window.addEventListener('resize', () => { resizeCanvas(); draw(); });
 
 // ---- 在线模式：接收父页面消息 ----
 window.addEventListener('message', (e) => {
+  if (e.origin !== window.location.origin || e.source !== window.parent) return;
   const data = e.data;
-  if (!data || !data.type) return;
+  if (!data || typeof data !== 'object' || typeof data.type !== 'string') return;
+  const onlyKeys = (keys) => Object.keys(data).every((key) => keys.includes(key));
+  const onlyCoordinateKeys = (cell) => Object.keys(cell).every((key) => key === 'row' || key === 'col');
+  const validCoord = (value) => Number.isInteger(value) && value >= 0 && value < BOARD_SIZE;
 
   switch (data.type) {
     case 'gomoku-setup':
+      if (!onlyKeys(['type', 'role', 'roomId', 'isMyTurn'])
+        || !['guest1', 'guest2'].includes(data.role)
+        || !['A', 'B'].includes(data.roomId)
+        || typeof data.isMyTurn !== 'boolean') return;
       gameMode = 'online';
       onlineRole = data.role;        // 'guest1' | 'guest2'
       onlineRoomId = data.roomId;    // 'A' | 'B'
@@ -1080,7 +1088,8 @@ window.addEventListener('message', (e) => {
       break;
 
     case 'gomoku-opponent-move':
-      if (gameMode !== 'online') return;
+      if (gameMode !== 'online' || !onlyKeys(['type', 'row', 'col'])
+        || !validCoord(data.row) || !validCoord(data.col)) return;
       {
         const oppPlayer = onlineRole === 'guest1' ? WHITE : BLACK;
         placeOpponentPiece(data.row, data.col, oppPlayer);
@@ -1090,7 +1099,12 @@ window.addEventListener('message', (e) => {
       break;
 
     case 'gomoku-game-over':
-      if (gameMode !== 'online') return;
+      if (gameMode !== 'online' || !onlyKeys(['type', 'winner', 'winCells'])
+        || !['black', 'white', 'draw'].includes(data.winner)
+        || !Array.isArray(data.winCells)
+        || data.winCells.length > 5
+        || !data.winCells.every((cell) => cell && onlyCoordinateKeys(cell)
+          && validCoord(cell.row) && validCoord(cell.col))) return;
       {
         const winnerColor = data.winner === 'black' ? BLACK : data.winner === 'white' ? WHITE : null;
         gameOver = true;
@@ -1122,7 +1136,7 @@ window.addEventListener('message', (e) => {
       break;
 
     case 'gomoku-opponent-left':
-      if (gameMode !== 'online') return;
+      if (gameMode !== 'online' || !onlyKeys(['type'])) return;
       onlineMyTurn = false;
       gameOver = true;
       updateUI();
@@ -1137,7 +1151,7 @@ window.addEventListener('message', (e) => {
       break;
 
     case 'gomoku-room-disbanded':
-      if (gameMode !== 'online') return;
+      if (gameMode !== 'online' || !onlyKeys(['type'])) return;
       onlineMyTurn = false;
       gameOver = true;
       updateUI();
@@ -1151,7 +1165,9 @@ window.addEventListener('message', (e) => {
       break;
 
     case 'gomoku-undo-applied':
-      if (gameMode !== 'online') return;
+      if (gameMode !== 'online' || !onlyKeys(['type', 'row', 'col', 'turn'])
+        || !validCoord(data.row) || !validCoord(data.col)
+        || !['black', 'white'].includes(data.turn)) return;
       {
         const lastLocal = history.pop();
         if (lastLocal) {
@@ -1170,6 +1186,7 @@ window.addEventListener('message', (e) => {
       break;
 
     case 'gomoku-rematch-start':
+      if (!onlyKeys(['type', 'isMyTurn']) || typeof data.isMyTurn !== 'boolean') return;
       // 服务器确认的重新开始，直接重置不经过 postMessage
       cancelAI();
       initGrid();
@@ -1196,9 +1213,7 @@ draw();
   if (roomId) {
     // 通知父页面此 iframe 已准备好
     try {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'gomoku-ready', roomId }, '*');
-      }
+      postToParent({ type: 'gomoku-ready', roomId });
     } catch (_) {}
   }
 })();

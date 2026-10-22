@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { YaoValue, PaipanResult, InterpretResult } from "@/lib/yijing/types";
 import { paipan } from "@/lib/yijing/paipan";
 import { getProvinces, getCitiesByProvince } from "@/lib/yijing/data/regions";
@@ -8,45 +8,21 @@ import YaoSelector from "@/components/yijing/YaoSelector";
 import PaipanDisplay from "@/components/yijing/PaipanDisplay";
 import AIInterpret from "@/components/yijing/AIInterpret";
 import ArchivePanel from "@/components/yijing/ArchivePanel";
+import { useAdminSession } from "@/lib/auth/use-admin-session";
 
 const DEFAULT_YAO: YaoValue[] = [7, 7, 7, 7, 7, 7];
 
 export default function YijingPage() {
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const { isAuthed, isCheckingAuth, csrfToken, login, logout } = useAdminSession();
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
-  const [showHint, setShowHint] = useState(false);
-
-  // 挂载时检查 sessionStorage 中是否有有效 token
-  useEffect(() => {
-    const token = sessionStorage.getItem("yijing-auth");
-    if (!token) { setIsCheckingAuth(false); return; }
-    fetch("/api/tools/yijing/auth", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((d) => { if (d.valid) setIsAuthed(true); })
-      .catch(() => {})
-      .finally(() => setIsCheckingAuth(false));
-  }, []);
 
   async function handleAuth() {
     setAuthError("");
     try {
-      const res = await fetch("/api/tools/yijing/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: authPassword }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({ error: "密码错误" }));
-        setAuthError(d.error || "密码错误");
-        return;
-      }
-      const { token } = await res.json();
-      sessionStorage.setItem("yijing-auth", token);
-      setIsAuthed(true);
+      const error = await login(authPassword);
+      if (error) setAuthError(error);
+      else setAuthPassword("");
     } catch {
       setAuthError("验证失败，请重试");
     }
@@ -114,7 +90,7 @@ export default function YijingPage() {
       // 同步到服务端（静默降级）
       fetch("/api/tools/yijing/archives", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify(record),
       }).catch(() => {});
     } catch {
@@ -129,7 +105,7 @@ export default function YijingPage() {
     try {
       const res = await fetch("/api/tools/yijing/interpret", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify({
           question: question.trim(),
           gender,
@@ -189,20 +165,6 @@ export default function YijingPage() {
             验证
           </button>
 
-          <p className="text-center">
-            <button
-              type="button"
-              onClick={() => setShowHint(!showHint)}
-              className="text-xs text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-400"
-            >
-              {showHint ? "隐藏提示" : "忘记密码？"}
-            </button>
-          </p>
-          {showHint && (
-            <p className="text-center text-sm font-mono text-slate-500 dark:text-slate-400">
-              m3r1n+b2gu2
-            </p>
-          )}
         </div>
       </div>
     );
@@ -210,7 +172,14 @@ export default function YijingPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
-      <div className="text-center mb-10">
+      <div className="relative text-center mb-10">
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="absolute right-0 top-0 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+        >
+          退出登录
+        </button>
         <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
           周易六爻排盘解卦
         </h1>
@@ -231,6 +200,7 @@ export default function YijingPage() {
                   type="text"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
+                  maxLength={1000}
                   placeholder="例如：本次跳槽是否顺利？"
                   className="w-full rounded-lg border border-[#D4C5A0]/60 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:border-[#C9A96E] focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:placeholder-slate-500"
                 />
@@ -327,7 +297,8 @@ export default function YijingPage() {
             <p className="font-semibold text-[#8B6914] dark:text-[#C9A96E] mb-2">隐私保护 & 免责声明</p>
             <ul className="space-y-1.5 list-disc list-inside">
               <li>您的摇卦数据将保存在浏览器本地和服务器，仅用于存档查看，不会用于任何其他目的。</li>
-              <li>AI 解卦结果由 DeepSeek 大模型生成，仅供娱乐参考，不构成任何形式的专业建议（包括但不限于法律、医疗、投资等）。</li>
+              <li>点击 AI 解卦后，问题与排盘信息会发送给第三方 DeepSeek 服务处理。</li>
+              <li>AI 解卦仅供娱乐参考，不构成法律、医疗或投资建议。</li>
               <li>命运掌握在自己手中，请理性看待解卦内容。</li>
             </ul>
           </div>
@@ -368,7 +339,7 @@ export default function YijingPage() {
 
               {interpretResult && <AIInterpret result={interpretResult} />}
 
-              {paipanResult && <ArchivePanel />}
+              {paipanResult && <ArchivePanel csrfToken={csrfToken} />}
             </div>
           ) : (
             <div className="flex h-full min-h-[300px] items-center justify-center rounded-xl border border-dashed border-[#D4C5A0]/60 bg-[#FDF8F0]/50 text-sm text-slate-400 dark:border-slate-600 dark:bg-slate-800/30">

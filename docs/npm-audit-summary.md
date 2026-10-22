@@ -1,0 +1,13 @@
+# npm 依赖安全审计摘要
+
+审计日期：2026-10-22。
+
+- Next.js 升级到 16.4.2，React/React DOM 升级到 19.3.1。
+- `ws` 升级到 8.22.0，`next-mdx-remote` 升级到 6.0.0。
+- 未使用的 `pdfjs-dist` 已删除。
+- `gray-matter` 及其旧 `js-yaml` 链已删除，文章 frontmatter 改由 `yaml` 2.9.1 解析并禁用别名。
+- DOMPurify、PostCSS、source-map-js 等传递依赖已通过 lockfile 更新到修复版本。
+- KaTeX 固定并覆盖为 0.18.2。
+- `npm audit --omit=dev --json` 最终结果：0 个漏洞（critical/high/moderate/low 均为 0）。
+
+全量审计仍会统计仅在构建、lint 或测试期间使用的开发依赖；生产验收以 `--omit=dev` 为准，开发依赖仍应随月度维护窗口持续升级。

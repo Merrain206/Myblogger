@@ -1,14 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
+import { promises as fs } from "node:fs";
+import { extname } from "node:path";
+import { requireAdmin } from "@/lib/auth/route-auth";
+import { hermesMediaDirectory, resolveMediaPath } from "@/lib/hermes/sync";
+import { noStoreHeaders, privateJson } from "@/lib/security/http";
 
-interface ImageInfo {
-  name: string;
-  size: number;
-  mimeType: string;
-  mtime: number;
-  url: string;
-}
+export const dynamic = "force-dynamic";
 
 const MIME_MAP: Record<string, string> = {
   ".svg": "image/svg+xml",
@@ -19,60 +15,51 @@ const MIME_MAP: Record<string, string> = {
   ".webp": "image/webp",
 };
 
-export async function GET(request: NextRequest) {
-  const dir = path.join(process.cwd(), "public", "hermes");
+export async function GET(request: Request) {
+  const auth = requireAdmin(request);
+  if (!auth.ok) return auth.response;
+  const directory = hermesMediaDirectory();
+  const name = new URL(request.url).searchParams.get("name");
 
-  const name = request.nextUrl.searchParams.get("name");
-  if (name) {
-    if (name.includes("..") || name.includes("/") || name.includes("\\")) {
-      return NextResponse.json({ error: "非法文件名" }, { status: 400 });
-    }
-    const ext = path.extname(name).toLowerCase();
-    const mimeType = MIME_MAP[ext];
-    if (!mimeType) {
-      return NextResponse.json({ error: "不支持的文件类型" }, { status: 400 });
-    }
-    const filePath = path.join(dir, name);
-    if (!path.resolve(filePath).startsWith(path.resolve(dir))) {
-      return NextResponse.json({ error: "非法路径" }, { status: 400 });
-    }
+  if (name !== null) {
+    const filePath = resolveMediaPath(directory, name);
+    const mimeType = MIME_MAP[extname(name).toLowerCase()];
+    if (!filePath || !mimeType) return privateJson({ error: "非法文件名" }, { status: 400 });
     try {
-      const buf = await fs.readFile(filePath);
-      return new NextResponse(buf, {
+      const buffer = await fs.readFile(filePath);
+      return new Response(buffer, {
         headers: {
+          ...noStoreHeaders,
           "Content-Type": mimeType,
-          "Content-Length": String(buf.length),
-          "Cache-Control": "public, max-age=86400",
+          "Content-Length": String(buffer.length),
+          "Content-Security-Policy": "sandbox; default-src 'none'",
+          "X-Content-Type-Options": "nosniff",
         },
       });
     } catch {
-      return NextResponse.json({ error: "文件不存在" }, { status: 404 });
+      return privateJson({ error: "文件不存在" }, { status: 404 });
     }
   }
 
   try {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const images: ImageInfo[] = [];
-
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    const images = [];
     for (const entry of entries) {
-      if (!entry.isFile()) continue;
-      const ext = path.extname(entry.name).toLowerCase();
-      if (!MIME_MAP[ext]) continue;
-
-      const filePath = path.join(dir, entry.name);
+      const filePath = resolveMediaPath(directory, entry.name);
+      const mimeType = MIME_MAP[extname(entry.name).toLowerCase()];
+      if (!entry.isFile() || !filePath || !mimeType) continue;
       const stat = await fs.stat(filePath);
       images.push({
         name: entry.name,
         size: stat.size,
-        mimeType: MIME_MAP[ext],
+        mimeType,
         mtime: stat.mtimeMs,
-        url: `/api/media?name=${entry.name}`,
+        url: `/api/media?name=${encodeURIComponent(entry.name)}`,
       });
     }
-
-    images.sort((a, b) => b.mtime - a.mtime);
-    return NextResponse.json({ images, count: images.length });
+    images.sort((left, right) => right.mtime - left.mtime);
+    return privateJson({ images, count: images.length });
   } catch {
-    return NextResponse.json({ images: [], count: 0 });
+    return privateJson({ images: [], count: 0 });
   }
 }

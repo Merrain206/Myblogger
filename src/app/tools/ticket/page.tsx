@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 import TicketPreview, { type TicketInfo } from "@/components/TicketPreview";
+import { useAdminSession } from "@/lib/auth/use-admin-session";
 
 
 const DEFAULT_TICKET: TicketInfo = {
@@ -48,6 +49,9 @@ const DISCOUNT_OPTIONS = [
 ];
 
 export default function TicketPage() {
+  const { isAuthed, isCheckingAuth, csrfToken, login, logout } = useAdminSession();
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
   const [ticket, setTicket] = useState<TicketInfo>(DEFAULT_TICKET);
   const [rawText, setRawText] = useState("");
   const [parsing, setParsing] = useState(false);
@@ -96,7 +100,7 @@ export default function TicketPage() {
     try {
       const res = await fetch("/api/tools/ticket/parse", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
         body: JSON.stringify({ text }),
       });
       if (!res.ok) {
@@ -104,7 +108,6 @@ export default function TicketPage() {
         throw new Error(err.error || `请求失败 (${res.status})`);
       }
       const { data: parsed } = await res.json();
-      console.log("[车票解析] AI解析结果:", parsed);
       setTicket((prev) => ({ ...prev, ...parsed }));
       const fieldCount = Object.keys(parsed).filter(
         (k) => parsed[k] && parsed[k] !== ""
@@ -115,11 +118,10 @@ export default function TicketPage() {
           : "未识别到有效字段，请检查文本内容"
       );
     } catch (err) {
-      console.error("解析失败:", err);
       setImportStatus("解析失败：" + (err instanceof Error ? err.message : "请手动填写"));
     }
     setParsing(false);
-  }, [rawText]);
+  }, [csrfToken, rawText]);
 
   const handlePrint = useCallback(async () => {
     setIsSinglePrinting(true);
@@ -166,6 +168,45 @@ export default function TicketPage() {
     : "85.6mm 53.98mm landscape";
 
   const printPageMargin = (isBatchPrinting || isSinglePrinting) ? "3mm" : "0";
+
+  async function handleAuth() {
+    setAuthError("");
+    const error = await login(authPassword);
+    if (error) setAuthError(error);
+    else setAuthPassword("");
+  }
+
+  if (isCheckingAuth) {
+    return <div className="flex min-h-[60vh] items-center justify-center">正在检查登录状态...</div>;
+  }
+
+  if (!isAuthed) {
+    return (
+      <div className="mx-auto flex min-h-[70vh] max-w-md flex-col items-center justify-center px-4">
+        <h1 className="mb-2 text-3xl font-bold text-slate-900 dark:text-slate-100">车票生成器</h1>
+        <p className="mb-8 text-sm text-slate-500 dark:text-slate-400">请输入管理员密码</p>
+        <div className="w-full space-y-4">
+          <input
+            type="password"
+            value={authPassword}
+            onChange={(event) => { setAuthPassword(event.target.value); setAuthError(""); }}
+            onKeyDown={(event) => { if (event.key === "Enter") void handleAuth(); }}
+            maxLength={256}
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center dark:border-slate-600 dark:bg-slate-800"
+          />
+          {authError && <p className="text-center text-sm text-red-500">{authError}</p>}
+          <button
+            type="button"
+            onClick={() => void handleAuth()}
+            disabled={!authPassword}
+            className="w-full rounded-xl bg-primary-500 py-3 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            登录
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -215,6 +256,13 @@ export default function TicketPage() {
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="no-print mb-8 text-center">
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="float-right text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          >
+            退出登录
+          </button>
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100">车票生成器</h1>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             粘贴 12306 电子发票原始文本，AI 智能识别并填充车票信息
@@ -235,6 +283,7 @@ export default function TicketPage() {
                   }}
                   placeholder="在这里输入待识别文本"
                   rows={6}
+                  maxLength={12000}
                   className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500"
                 />
                 <button
@@ -253,6 +302,9 @@ export default function TicketPage() {
                     {importStatus}
                   </p>
                 )}
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+                  点击“智能解析”后，文本会发送给第三方 DeepSeek 服务。请只提交处理所必需的信息。
+                </p>
               </div>
 
               {/* 样式切换 */}

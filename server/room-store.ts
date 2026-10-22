@@ -41,6 +41,8 @@ export const rooms = new Map<string, {
   disbandTimer: ReturnType<typeof setTimeout> | null;
   rematchVotes: Set<string>;
   countdown: number | null;
+  gameId: string | null;
+  pendingUndoBy: string | null;
 }>();
 
 function initRoom(roomId: "A" | "B") {
@@ -56,6 +58,8 @@ function initRoom(roomId: "A" | "B") {
     disbandTimer: null,
     rematchVotes: new Set(),
     countdown: null,
+    gameId: null,
+    pendingUndoBy: null,
   });
 }
 
@@ -86,6 +90,8 @@ export function resetRoom(roomId: string) {
     disbandTimer: null,
     rematchVotes: new Set(),
     countdown: null,
+    gameId: null,
+    pendingUndoBy: null,
   });
 }
 

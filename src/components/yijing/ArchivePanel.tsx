@@ -27,7 +27,7 @@ function loadArchives(): ArchiveRecord[] {
   }
 }
 
-export default function ArchivePanel() {
+export default function ArchivePanel({ csrfToken }: { csrfToken: string }) {
   const [archives, setArchives] = useState<ArchiveRecord[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
@@ -65,9 +65,12 @@ export default function ArchivePanel() {
       // localStorage 满时静默失败
     }
     // 同步删除服务端（静默降级）
-    fetch(`/api/tools/yijing/archives?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
+    fetch(`/api/tools/yijing/archives?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { "X-CSRF-Token": csrfToken },
+    }).catch(() => {});
     if (viewingId === id) setViewingId(null);
-  }, [archives, viewingId]);
+  }, [archives, csrfToken, viewingId]);
 
   const viewing = archives.find((a) => a.id === viewingId);
 

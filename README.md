@@ -49,11 +49,11 @@
 
 | 技术 | 用途 |
 |------|------|
-| Next.js 15 (App Router) | 框架，服务端组件优先 |
+| Next.js 16 (App Router) | 框架，服务端组件优先 |
 | TypeScript | 类型安全 |
 | Tailwind CSS + `@tailwindcss/typography` | 样式，`class` 暗色模式 |
 | MDX (`@next/mdx` + `next-mdx-remote`) | 文章内容 |
-| gray-matter | Frontmatter 解析 |
+| yaml | Frontmatter 解析 |
 | Fuse.js | 客户端全文搜索 |
 | rehype-pretty-code + Shiki | 代码高亮 |
 | remark-gfm + remark-math | GitHub 风格 Markdown + 数学公式 |
@@ -68,6 +68,8 @@
 
 ## 快速开始
 
+需要 Node.js 22.5 或更高版本。先复制 `.env.example`，运行 `npm run auth:generate` 生成管理员密码哈希和会话密钥，并配置 `DATABASE_PATH`、`ALLOWED_ORIGINS` 等变量。
+
 ```bash
 npm install
 npm run dev        # 启动开发服务器 (localhost:3000)
@@ -75,6 +77,8 @@ npm run ws-server  # 启动五子棋 WebSocket 服务器 (端口 3001)
 npm run build      # 构建生产版本
 npm start          # 启动生产服务器
 ```
+
+安全部署、Cloudflare 缓存规则、事件响应和 Git 历史清理分别见 `docs/deployment-security.md`、`docs/cloudflare-security-runbook.md`、`docs/security-incident-response.md` 与 `docs/git-history-cleanup.md`。
 
 ## 项目结构
 

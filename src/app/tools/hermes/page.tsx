@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useAdminSession } from "@/lib/auth/use-admin-session";
 
 interface ImageInfo {
   name: string;
@@ -11,8 +12,7 @@ interface ImageInfo {
 }
 
 export default function HermesPage() {
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const { isAuthed, isCheckingAuth, csrfToken, login, logout } = useAdminSession();
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
 
@@ -28,22 +28,10 @@ export default function HermesPage() {
     if (saved) setLastSyncTime(Number(saved));
   }, []);
 
-  useEffect(() => {
-    const token = sessionStorage.getItem("yijing-auth");
-    if (!token) { setIsCheckingAuth(false); return; }
-    fetch("/api/tools/yijing/auth", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((d) => { if (d.valid) setIsAuthed(true); })
-      .catch(() => {})
-      .finally(() => setIsCheckingAuth(false));
-  }, []);
-
   const fetchImages = useCallback(async () => {
     setLoadingImages(true);
     try {
-      const res = await fetch("/api/media");
+      const res = await fetch("/api/media", { cache: "no-store" });
       const data = await res.json();
       setImages(data.images || []);
     } catch {
@@ -60,19 +48,9 @@ export default function HermesPage() {
   async function handleAuth() {
     setAuthError("");
     try {
-      const res = await fetch("/api/tools/yijing/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: authPassword }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({ error: "密码错误" }));
-        setAuthError(d.error || "密码错误");
-        return;
-      }
-      const { token } = await res.json();
-      sessionStorage.setItem("yijing-auth", token);
-      setIsAuthed(true);
+      const error = await login(authPassword);
+      if (error) setAuthError(error);
+      else setAuthPassword("");
     } catch {
       setAuthError("验证失败，请重试");
     }
@@ -83,12 +61,9 @@ export default function HermesPage() {
     setSyncResult(null);
     setSyncError("");
     try {
-      const token = sessionStorage.getItem("yijing-auth");
       const res = await fetch("/api/sync-media", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "X-CSRF-Token": csrfToken },
       });
       const data = await res.json();
       if (!res.ok) {
@@ -186,6 +161,13 @@ export default function HermesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+          >
+            退出登录
+          </button>
           {lastSyncTime && (
             <span className="text-xs text-slate-400 dark:text-slate-500">
               上次同步: {formatTime(lastSyncTime)}

@@ -1,0 +1,4 @@
+Contact: mailto:merrain0206@163.com
+Expires: 2027-10-22T00:00:00Z
+Preferred-Languages: zh, en
+Canonical: https://merrain.cn/.well-known/security.txt

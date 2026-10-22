@@ -27,7 +27,7 @@ function RoomContent() {
 
   const postToIframe = useCallback((msg: object) => {
     if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(msg, "*");
+      iframeRef.current.contentWindow.postMessage(msg, window.location.origin);
     }
   }, []);
 
@@ -87,11 +87,17 @@ function RoomContent() {
   // 监听 iframe postMessage
   useEffect(() => {
     function handleMessage(e: MessageEvent) {
-      const data = e.data;
-      if (!data || !data.type) return;
+      if (e.origin !== window.location.origin || e.source !== iframeRef.current?.contentWindow) return;
+      const data = e.data as Record<string, unknown> | null;
+      if (!data || typeof data.type !== "string") return;
+      const hasOnlyKeys = (keys: string[]) => Object.keys(data).every((key) => keys.includes(key));
 
       switch (data.type) {
         case "gomoku-move": {
+          if (!hasOnlyKeys(["type", "row", "col"])
+            || !Number.isSafeInteger(data.row) || !Number.isSafeInteger(data.col)
+            || Number(data.row) < 0 || Number(data.row) >= 15
+            || Number(data.col) < 0 || Number(data.col) >= 15) return;
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
@@ -102,6 +108,7 @@ function RoomContent() {
           break;
         }
         case "gomoku-request-undo": {
+          if (!hasOnlyKeys(["type"])) return;
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "undo-request" }));
@@ -109,6 +116,7 @@ function RoomContent() {
           break;
         }
         case "gomoku-request-rematch": {
+          if (!hasOnlyKeys(["type"])) return;
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "request-rematch" }));
@@ -214,6 +222,19 @@ function RoomContent() {
         });
         break;
       }
+
+      case "undo-requested": {
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const accept = window.confirm("对手申请悔棋，是否同意？");
+          ws.send(JSON.stringify({ type: "undo-response", accept }));
+        }
+        break;
+      }
+
+      case "undo-rejected":
+        window.alert("对手拒绝了悔棋申请");
+        break;
 
       case "rematch-accepted":
         setStatus("playing");

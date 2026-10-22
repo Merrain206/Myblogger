@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
-import matter from "gray-matter";
+import { parse as parseYaml } from "yaml";
 import Fuse from "fuse.js";
-import type { Post, PostMeta } from "./types";
+import type { Post } from "./types";
 
 const postsDirectory = path.join(process.cwd(), "src/content/posts");
 
@@ -15,24 +15,39 @@ function getReadingTime(content: string): number {
   return Math.max(1, Math.ceil(text.length / charsPerMinute));
 }
 
+function parseFrontmatter(source: string): { data: Record<string, unknown>; content: string } {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(source);
+  if (!match) return { data: {}, content: source };
+  const parsed: unknown = parseYaml(match[1], { schema: "core", maxAliasCount: 0 });
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("文章 frontmatter 必须是对象");
+  }
+  return { data: parsed as Record<string, unknown>, content: source.slice(match[0].length) };
+}
+
+function text(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
 function parsePost(fileName: string): Post | null {
   if (!fileName.endsWith(".mdx")) return null;
 
   const slug = fileName.replace(/\.mdx$/, "");
   const fullPath = path.join(postsDirectory, fileName);
   const fileContents = fs.readFileSync(fullPath, "utf8");
-  const { data, content } = matter(fileContents);
+  const { data, content } = parseFrontmatter(fileContents);
+  const tags = Array.isArray(data.tags) ? data.tags.filter((tag): tag is string => typeof tag === "string") : [];
 
   return {
     slug,
     content,
     readingTime: getReadingTime(content),
-    title: data.title || slug,
-    date: data.date || new Date().toISOString(),
-    category: data.category || "其他",
-    tags: data.tags || [],
-    summary: data.summary || "",
-    cover: data.cover,
+    title: text(data.title, slug),
+    date: text(data.date, new Date().toISOString()),
+    category: text(data.category, "其他"),
+    tags,
+    summary: text(data.summary, ""),
+    cover: typeof data.cover === "string" ? data.cover : undefined,
   };
 }
 

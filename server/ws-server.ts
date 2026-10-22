@@ -1,28 +1,93 @@
-// 五子棋在线对战 WebSocket 服务器 — 端口 3001
+import { randomUUID } from "node:crypto";
+import type { IncomingMessage } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
+import { z } from "zod";
+import { insertScore } from "../src/lib/database";
 import {
   rooms, resetRoom, writeSummaries, BOARD_SIZE, EMPTY, BLACK, WHITE,
 } from "./room-store";
 
-const PORT = 3001;
+const PORT = Number(process.env.WS_PORT || 3001);
 const DISBAND_SECONDS = 30;
-const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
+const MAX_PAYLOAD = 32 * 1024;
+const MAX_CONNECTIONS_PER_IP = 5;
+const MAX_MESSAGES_PER_WINDOW = 30;
+const MESSAGE_WINDOW_MS = 10_000;
+const IDLE_TIMEOUT_MS = 2 * 60_000;
+const HEARTBEAT_MS = 30_000;
+const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]] as const;
 
-// ---- 胜负判定 ----
+const clientMessageSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("join-room"), roomId: z.enum(["A", "B"]) }).strict(),
+  z.object({
+    type: z.literal("place-piece"),
+    row: z.number().int().min(0).max(BOARD_SIZE - 1),
+    col: z.number().int().min(0).max(BOARD_SIZE - 1),
+  }).strict(),
+  z.object({ type: z.literal("request-rematch") }).strict(),
+  z.object({ type: z.literal("undo-request") }).strict(),
+  z.object({ type: z.literal("undo-response"), accept: z.boolean() }).strict(),
+  z.object({ type: z.literal("leave-room") }).strict(),
+]);
+
+type ClientMessage = z.infer<typeof clientMessageSchema>;
+
+interface ConnectionState {
+  roomId: string | null;
+  name: string | null;
+  ip: string;
+  messageCount: number;
+  windowStartedAt: number;
+  invalidCount: number;
+  lastActivityAt: number;
+  alive: boolean;
+}
+
+const connectionCounts = new Map<string, number>();
+const states = new WeakMap<WebSocket, ConnectionState>();
+
+export function allowedWebSocketOrigin(origin: string | undefined): boolean {
+  if (!origin) return false;
+  const allowed = new Set((process.env.ALLOWED_ORIGINS || "").split(",").map((item) => item.trim()).filter(Boolean));
+  if (allowed.has(origin)) return true;
+  return process.env.NODE_ENV !== "production"
+    && (origin === "http://localhost:3000" || origin === "http://127.0.0.1:3000");
+}
+
+function clientIp(request: IncomingMessage): string {
+  const remote = request.socket.remoteAddress || "unknown";
+  if (process.env.TRUST_PROXY !== "1") return remote;
+  const trusted = new Set((process.env.TRUSTED_PROXY_IPS || "").split(",").map((item) => item.trim()).filter(Boolean));
+  if (!trusted.has(remote)) return remote;
+  const forwarded = request.headers["x-forwarded-for"];
+  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(",")[0]?.trim();
+  return first && first.length <= 64 ? first : remote;
+}
+
+function send(ws: WebSocket, message: object) {
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+}
+
+function fail(ws: WebSocket, message: string) {
+  send(ws, { type: "error", message });
+}
+
 function checkWinAt(grid: number[][], row: number, col: number, player: number) {
   for (const [dr, dc] of DIRS) {
     const cells = [{ row, col }];
-    for (let i = 1; i < 5; i++) {
-      const r = row + dr * i, c = col + dc * i;
-      if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && grid[r][c] === player) {
-        cells.push({ row: r, col: c });
-      } else break;
+    for (let offset = 1; offset < 5; offset++) {
+      const nextRow = row + dr * offset;
+      const nextCol = col + dc * offset;
+      if (nextRow >= 0 && nextRow < BOARD_SIZE && nextCol >= 0 && nextCol < BOARD_SIZE
+        && grid[nextRow][nextCol] === player) cells.push({ row: nextRow, col: nextCol });
+      else break;
     }
-    for (let i = 1; i < 5; i++) {
-      const r = row - dr * i, c = col - dc * i;
-      if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && grid[r][c] === player) {
-        cells.unshift({ row: r, col: c });
-      } else break;
+    for (let offset = 1; offset < 5; offset++) {
+      const nextRow = row - dr * offset;
+      const nextCol = col - dc * offset;
+      if (nextRow >= 0 && nextRow < BOARD_SIZE && nextCol >= 0 && nextCol < BOARD_SIZE
+        && grid[nextRow][nextCol] === player) cells.unshift({ row: nextRow, col: nextCol });
+      else break;
     }
     if (cells.length >= 5) return cells.slice(0, 5);
   }
@@ -30,15 +95,7 @@ function checkWinAt(grid: number[][], row: number, col: number, player: number) 
 }
 
 function isBoardFull(grid: number[][]) {
-  for (let r = 0; r < BOARD_SIZE; r++)
-    for (let c = 0; c < BOARD_SIZE; c++)
-      if (grid[r][c] === EMPTY) return false;
-  return true;
-}
-
-// ---- 广播 ----
-function send(ws: WebSocket, msg: object) {
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  return grid.every((row) => row.every((cell) => cell !== EMPTY));
 }
 
 function buildRoomState(roomId: string, playerName: string | null) {
@@ -46,7 +103,7 @@ function buildRoomState(roomId: string, playerName: string | null) {
   return {
     roomId,
     status: room.status,
-    players: room.players.map(p => ({ name: p.name, connected: p.ws !== null })),
+    players: room.players.map((player) => ({ name: player.name, connected: player.ws !== null })),
     yourName: playerName || "",
     currentTurn: room.currentPlayer === BLACK ? "black" as const : "white" as const,
     history: room.history,
@@ -57,261 +114,280 @@ function buildRoomState(roomId: string, playerName: string | null) {
   };
 }
 
-// ---- 房间清理 ----
 function clearRoom(roomId: string) {
-  const room = rooms.get(roomId)!;
-  if (room.disbandTimer) { clearTimeout(room.disbandTimer); room.disbandTimer = null; }
+  const room = rooms.get(roomId);
+  if (room?.disbandTimer) clearInterval(room.disbandTimer);
   resetRoom(roomId);
   writeSummaries();
 }
 
 function startDisbandTimer(roomId: string) {
   const room = rooms.get(roomId)!;
-  let sec = DISBAND_SECONDS;
-  room.countdown = sec;
-
-  const tick = setInterval(() => {
-    sec--;
-    if (sec <= 0) {
-      clearInterval(tick);
-      const p = room.players[0];
-      if (p && p.ws) send(p.ws, { type: "room-disbanded" });
+  let seconds = DISBAND_SECONDS;
+  room.countdown = seconds;
+  const timer = setInterval(() => {
+    seconds -= 1;
+    if (seconds <= 0) {
+      clearInterval(timer);
+      const first = room.players[0];
+      if (first?.ws) send(first.ws, { type: "room-disbanded" });
       clearRoom(roomId);
-      console.log(`[Room ${roomId}] 超时解散`);
       return;
     }
-    room.countdown = sec;
+    room.countdown = seconds;
     writeSummaries();
-    if (room.players[0] && room.players[0].ws) {
-      send(room.players[0].ws, { type: "countdown", seconds: sec });
-    }
+    if (room.players[0]?.ws) send(room.players[0].ws!, { type: "countdown", seconds });
   }, 1000);
-
-  room.disbandTimer = tick as unknown as ReturnType<typeof setTimeout>;
+  room.disbandTimer = timer;
 }
 
-// ---- 主逻辑 ----
-const wss = new WebSocketServer({ port: PORT });
+function persistGame(roomId: string) {
+  const room = rooms.get(roomId)!;
+  if (!room.gameId || room.players.length !== 2) return;
+  const date = new Date().toISOString();
+  for (const player of room.players) {
+    const playerColor = player.name === "Guest 1" ? BLACK : WHITE;
+    const result = room.winner === null ? "draw" : room.winner === playerColor ? "win" : "loss";
+    insertScore({
+      id: `${room.gameId}-${player.name === "Guest 1" ? "black" : "white"}`,
+      playerName: player.name,
+      mode: "pvp",
+      difficulty: null,
+      result,
+      moves: room.history.length,
+      date,
+    }, { gameId: room.gameId, trusted: true });
+  }
+}
+
+function resetForRematch(roomId: string) {
+  const room = rooms.get(roomId)!;
+  room.grid = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(EMPTY));
+  room.history = [];
+  room.currentPlayer = BLACK;
+  room.gameOver = false;
+  room.winner = null;
+  room.winCells = [];
+  room.rematchVotes.clear();
+  room.pendingUndoBy = null;
+  room.gameId = randomUUID();
+  room.status = "playing";
+  writeSummaries();
+}
+
+function handleMessage(ws: WebSocket, state: ConnectionState, message: ClientMessage) {
+  if (message.type === "join-room") {
+    if (state.roomId) return fail(ws, "不能重复加入房间");
+    const room = rooms.get(message.roomId)!;
+    if (room.players.length >= 2) return fail(ws, "房间已满");
+    state.roomId = message.roomId;
+    state.name = room.players.length === 0 ? "Guest 1" : "Guest 2";
+    room.players.push({ name: state.name, ws });
+    if (room.players.length === 1) {
+      room.status = "waiting";
+      startDisbandTimer(message.roomId);
+      send(ws, { type: "room-state", state: buildRoomState(message.roomId, state.name) });
+      writeSummaries();
+    } else {
+      if (room.disbandTimer) clearInterval(room.disbandTimer);
+      room.disbandTimer = null;
+      room.countdown = null;
+      room.status = "playing";
+      room.gameId = randomUUID();
+      writeSummaries();
+      for (const player of room.players) {
+        if (player.ws) send(player.ws, { type: "room-state", state: buildRoomState(message.roomId, player.name) });
+      }
+    }
+    return;
+  }
+
+  if (!state.roomId || !state.name) return fail(ws, "请先加入房间");
+  const room = rooms.get(state.roomId)!;
+
+  if (message.type === "place-piece") {
+    if (room.status !== "playing" || room.gameOver) return fail(ws, "当前不可落子");
+    const player = state.name === "Guest 1" ? BLACK : WHITE;
+    if (room.currentPlayer !== player) return fail(ws, "还没轮到你");
+    if (room.grid[message.row][message.col] !== EMPTY) return fail(ws, "此处已有棋子");
+    room.grid[message.row][message.col] = player;
+    room.history.push({ row: message.row, col: message.col, player });
+    room.pendingUndoBy = null;
+    const winCells = checkWinAt(room.grid, message.row, message.col, player);
+    if (winCells || isBoardFull(room.grid)) {
+      room.gameOver = true;
+      room.winner = winCells ? player : null;
+      room.winCells = winCells || [];
+      room.status = "finished";
+      writeSummaries();
+      try { persistGame(state.roomId); } catch { console.error("[ws-server] 排行榜写入失败"); }
+      for (const participant of room.players) {
+        if (participant.ws) send(participant.ws, {
+          type: "game-over",
+          winner: winCells ? (player === BLACK ? "black" : "white") : "draw",
+          winCells: room.winCells,
+        });
+      }
+    } else {
+      room.currentPlayer = player === BLACK ? WHITE : BLACK;
+      for (const participant of room.players) {
+        if (participant.ws && participant.name !== state.name) {
+          send(participant.ws, { type: "opponent-move", row: message.row, col: message.col });
+        }
+      }
+    }
+    return;
+  }
+
+  if (message.type === "request-rematch") {
+    if (room.status !== "finished") return fail(ws, "当前不能重新开始");
+    room.rematchVotes.add(state.name);
+    if (room.rematchVotes.size === 2) {
+      resetForRematch(state.roomId);
+      for (const participant of room.players) if (participant.ws) send(participant.ws, { type: "rematch-accepted" });
+    }
+    return;
+  }
+
+  if (message.type === "undo-request") {
+    if (room.status !== "playing" || room.gameOver || room.history.length === 0 || room.pendingUndoBy) {
+      return fail(ws, "当前不可申请悔棋");
+    }
+    room.pendingUndoBy = state.name;
+    const opponent = room.players.find((player) => player.name !== state.name);
+    if (!opponent?.ws) { room.pendingUndoBy = null; return fail(ws, "对手不在线"); }
+    send(opponent.ws, { type: "undo-requested" });
+    return;
+  }
+
+  if (message.type === "undo-response") {
+    if (!room.pendingUndoBy || room.pendingUndoBy === state.name) return fail(ws, "没有待确认的悔棋申请");
+    if (!message.accept) {
+      room.pendingUndoBy = null;
+      for (const participant of room.players) if (participant.ws) send(participant.ws, { type: "undo-rejected" });
+      return;
+    }
+    const lastMove = room.history.pop();
+    room.pendingUndoBy = null;
+    if (!lastMove) return fail(ws, "没有可悔的棋");
+    room.grid[lastMove.row][lastMove.col] = EMPTY;
+    room.currentPlayer = lastMove.player;
+    for (const participant of room.players) if (participant.ws) send(participant.ws, {
+      type: "undo-applied",
+      row: lastMove.row,
+      col: lastMove.col,
+      turn: room.currentPlayer === BLACK ? "black" : "white",
+    });
+    return;
+  }
+
+  if (message.type === "leave-room") {
+    for (const participant of room.players) {
+      if (participant.ws && participant.name !== state.name) send(participant.ws, { type: "opponent-left" });
+    }
+    clearRoom(state.roomId);
+    state.roomId = null;
+    state.name = null;
+  }
+}
+
+const wss = new WebSocketServer({
+  port: PORT,
+  maxPayload: MAX_PAYLOAD,
+  perMessageDeflate: false,
+  verifyClient: (info, done) => {
+    if (!allowedWebSocketOrigin(info.origin)) return done(false, 403, "Forbidden");
+    const ip = clientIp(info.req);
+    if ((connectionCounts.get(ip) || 0) >= MAX_CONNECTIONS_PER_IP) return done(false, 429, "Too Many Connections");
+    done(true);
+  },
+});
 
 wss.on("listening", () => {
   writeSummaries();
-  console.log(`[ws-server] 五子棋 WebSocket 服务器已启动，端口 ${PORT}`);
+  console.log(`[ws-server] 已启动，端口 ${PORT}`);
 });
 
-wss.on("connection", (ws: WebSocket) => {
-  let myRoomId: string | null = null;
-  let myName: string | null = null;
+wss.on("connection", (ws, request) => {
+  const ip = clientIp(request);
+  connectionCounts.set(ip, (connectionCounts.get(ip) || 0) + 1);
+  const state: ConnectionState = {
+    roomId: null,
+    name: null,
+    ip,
+    messageCount: 0,
+    windowStartedAt: Date.now(),
+    invalidCount: 0,
+    lastActivityAt: Date.now(),
+    alive: true,
+  };
+  states.set(ws, state);
 
-  ws.on("message", (raw) => {
-    let msg: { type: string; [k: string]: unknown };
-    try {
-      msg = JSON.parse(raw.toString());
-    } catch {
-      send(ws, { type: "error", message: "无效的 JSON" });
-      return;
+  ws.on("error", () => {
+    // 协议错误由 ws 负责关闭连接；避免单个恶意连接触发未处理异常终止进程。
+  });
+  ws.on("pong", () => { state.alive = true; state.lastActivityAt = Date.now(); });
+  ws.on("message", (raw, isBinary) => {
+    const now = Date.now();
+    state.lastActivityAt = now;
+    if (now - state.windowStartedAt >= MESSAGE_WINDOW_MS) {
+      state.windowStartedAt = now;
+      state.messageCount = 0;
     }
+    state.messageCount += 1;
+    if (state.messageCount > MAX_MESSAGES_PER_WINDOW) return ws.close(1008, "Rate limit exceeded");
+    if (isBinary) return ws.close(1003, "Binary messages are not supported");
 
-    switch (msg.type) {
-      case "join-room": {
-        const roomId = msg.roomId as string;
-        if (roomId !== "A" && roomId !== "B") {
-          send(ws, { type: "error", message: "无效的房间号" });
-          return;
-        }
-
-        const room = rooms.get(roomId)!;
-
-        if (room.players.length >= 2) {
-          send(ws, { type: "error", message: "房间已满" });
-          return;
-        }
-
-        myRoomId = roomId;
-        myName = room.players.length === 0 ? "Guest 1" : "Guest 2";
-        room.players.push({ name: myName, ws });
-
-        if (room.players.length === 1) {
-          room.status = "waiting";
-          startDisbandTimer(roomId);
-          send(ws, { type: "room-state", state: buildRoomState(roomId, myName) });
-          writeSummaries();
-          console.log(`[Room ${roomId}] Guest 1 加入，等待对手...`);
-        } else {
-          if (room.disbandTimer) { clearInterval(room.disbandTimer); room.disbandTimer = null; }
-          room.countdown = null;
-          room.status = "playing";
-          writeSummaries();
-
-          for (const p of room.players) {
-            if (p.ws) send(p.ws, { type: "room-state", state: buildRoomState(roomId, p.name) });
-          }
-          console.log(`[Room ${roomId}] Guest 2 加入，对局开始`);
-        }
-        break;
+    try {
+      const parsed: unknown = JSON.parse(raw.toString("utf8"));
+      const message = clientMessageSchema.safeParse(parsed);
+      if (!message.success) {
+        state.invalidCount += 1;
+        fail(ws, "消息格式无效");
+        if (state.invalidCount >= 3) ws.close(1008, "Too many invalid messages");
+        return;
       }
-
-      case "place-piece": {
-        if (!myRoomId || !myName) return;
-        const room = rooms.get(myRoomId)!;
-        if (room.status !== "playing" || room.gameOver) {
-          send(ws, { type: "error", message: "当前不可落子" });
-          return;
-        }
-
-        const piecePlayer = myName === "Guest 1" ? BLACK : WHITE;
-        if (room.currentPlayer !== piecePlayer) {
-          send(ws, { type: "error", message: "还没轮到你" });
-          return;
-        }
-
-        const row = msg.row as number, col = msg.col as number;
-        if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
-          send(ws, { type: "error", message: "越界" });
-          return;
-        }
-        if (room.grid[row][col] !== EMPTY) {
-          send(ws, { type: "error", message: "此处已有棋子" });
-          return;
-        }
-
-        room.grid[row][col] = piecePlayer;
-        room.history.push({ row, col, player: piecePlayer });
-
-        const winResult = checkWinAt(room.grid, row, col, piecePlayer);
-        if (winResult) {
-          room.gameOver = true;
-          room.winner = piecePlayer;
-          room.winCells = winResult;
-          room.status = "finished";
-          writeSummaries();
-
-          for (const p of room.players) {
-            if (p.ws) {
-              const wn = room.winner === BLACK ? "black" : "white";
-              send(p.ws, { type: "game-over", winner: wn, winCells: winResult });
-            }
-          }
-        } else if (isBoardFull(room.grid)) {
-          room.gameOver = true;
-          room.winner = null;
-          room.status = "finished";
-          writeSummaries();
-
-          for (const p of room.players) {
-            if (p.ws) send(p.ws, { type: "game-over", winner: "draw", winCells: [] });
-          }
-        } else {
-          room.currentPlayer = piecePlayer === BLACK ? WHITE : BLACK;
-
-          for (const p of room.players) {
-            if (p.ws && p.name !== myName) {
-              send(p.ws, { type: "opponent-move", row, col });
-            }
-          }
-        }
-        break;
-      }
-
-      case "request-rematch": {
-        if (!myRoomId || !myName) return;
-        const room = rooms.get(myRoomId)!;
-        room.rematchVotes.add(myName);
-
-        if (room.rematchVotes.size >= 2) {
-          room.grid = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(EMPTY));
-          room.history = [];
-          room.currentPlayer = BLACK;
-          room.gameOver = false;
-          room.winner = null;
-          room.winCells = [];
-          room.rematchVotes = new Set();
-          room.status = "playing";
-          writeSummaries();
-
-          for (const p of room.players) {
-            if (p.ws) send(p.ws, { type: "rematch-accepted" });
-          }
-          console.log(`[Room ${myRoomId}] 再来一局`);
-        } else {
-          for (const p of room.players) {
-            if (p.ws && p.name !== myName) {
-              send(p.ws, { type: "room-state", state: buildRoomState(myRoomId!, p.name) });
-            }
-          }
-          send(ws, { type: "room-state", state: buildRoomState(myRoomId, myName) });
-        }
-        break;
-      }
-
-      case "undo-request": {
-        if (!myRoomId || !myName) return;
-        const room = rooms.get(myRoomId)!;
-        if (room.status !== "playing" || room.gameOver) {
-          send(ws, { type: "error", message: "当前不可悔棋" });
-          return;
-        }
-        if (room.history.length === 0) {
-          send(ws, { type: "error", message: "没有可悔的棋" });
-          return;
-        }
-
-        const lastMove = room.history.pop()!;
-        room.grid[lastMove.row][lastMove.col] = EMPTY;
-        room.currentPlayer = lastMove.player;
-
-        for (const p of room.players) {
-          if (p.ws) {
-            send(p.ws, {
-              type: "undo-applied",
-              row: lastMove.row,
-              col: lastMove.col,
-              turn: room.currentPlayer === BLACK ? "black" : "white",
-            });
-          }
-        }
-        break;
-      }
-
-      case "leave-room": {
-        if (!myRoomId || !myName) return;
-        const room = rooms.get(myRoomId)!;
-
-        for (const p of room.players) {
-          if (p.ws && p.name !== myName) send(p.ws, { type: "opponent-left" });
-        }
-
-        clearRoom(myRoomId);
-        console.log(`[Room ${myRoomId}] ${myName} 离开，房间重置`);
-        myRoomId = null;
-        myName = null;
-        break;
-      }
-
-      default:
-        send(ws, { type: "error", message: `未知消息类型: ${msg.type}` });
+      handleMessage(ws, state, message.data);
+    } catch {
+      state.invalidCount += 1;
+      fail(ws, "无效的 JSON");
+      if (state.invalidCount >= 3) ws.close(1008, "Too many invalid messages");
     }
   });
 
   ws.on("close", () => {
-    if (!myRoomId || !myName) return;
-    const room = rooms.get(myRoomId);
+    connectionCounts.set(ip, Math.max(0, (connectionCounts.get(ip) || 1) - 1));
+    if (!state.roomId || !state.name) return;
+    const room = rooms.get(state.roomId);
     if (!room) return;
-
-    const player = room.players.find(p => p.name === myName);
-    if (player) player.ws = null;
-
-    for (const p of room.players) {
-      if (p.ws && p.name !== myName) send(p.ws, { type: "opponent-left" });
+    for (const participant of room.players) {
+      if (participant.ws && participant.name !== state.name) send(participant.ws, { type: "opponent-left" });
     }
-
-    clearRoom(myRoomId);
-    console.log(`[Room ${myRoomId}] ${myName} 断开连接，房间重置`);
+    clearRoom(state.roomId);
+    state.roomId = null;
+    state.name = null;
   });
 });
 
-process.on("SIGINT", () => {
-  console.log("\n[ws-server] 正在关闭...");
-  for (const [id] of rooms) clearRoom(id);
-  wss.close();
-  process.exit(0);
-});
+const heartbeat = setInterval(() => {
+  const now = Date.now();
+  for (const ws of wss.clients) {
+    const state = states.get(ws);
+    if (!state) continue;
+    if (!state.alive || now - state.lastActivityAt > IDLE_TIMEOUT_MS) {
+      ws.terminate();
+      continue;
+    }
+    state.alive = false;
+    ws.ping();
+  }
+}, HEARTBEAT_MS);
+
+function shutdown() {
+  clearInterval(heartbeat);
+  for (const [roomId] of rooms) clearRoom(roomId);
+  wss.close(() => process.exit(0));
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

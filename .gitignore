@@ -19,14 +19,31 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env*.local
+# local env files and secrets
+.env*
+!.env.example
 
 # vercel
 .vercel
 
 # user data (server-side archives)
 src/data/yijing-archives.json
+src/data/gomoku-scores.json
+server/room-summaries.json
+
+# private tickets and OCR exports
+Tickets/*.pdf
+Tickets/pdfs/*.pdf
+Tickets/**/*ocr*
+Tickets/**/*.txt.json
+
+# local databases and migration backups
+.data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.backup-*
 
 # hermes synced images (server-only)
 public/hermes/*

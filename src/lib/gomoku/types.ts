@@ -7,6 +7,7 @@ export interface ScoreEntry {
   result: "win" | "loss" | "draw";
   moves: number;
   date: string;
+  trusted?: boolean;
 }
 
 export interface LeaderboardFilter {

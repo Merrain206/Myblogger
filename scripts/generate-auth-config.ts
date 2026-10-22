@@ -36,14 +36,20 @@ async function readPassword(): Promise<string> {
   });
 }
 
-const password = await readPassword();
-if (password.length < 12) {
-  console.error("密码至少需要 12 个字符。");
-  process.exit(1);
+async function main(): Promise<void> {
+  const password = await readPassword();
+  if (password.length < 12) {
+    throw new Error("密码至少需要 12 个字符。");
+  }
+
+  const salt = randomBytes(16);
+  const derived = await scrypt(password, salt, 32);
+  const passwordHash = `$scrypt$16384$8$1$${salt.toString("base64url")}$${derived.toString("base64url")}`;
+  console.log(`AUTH_PASSWORD_HASH=${passwordHash}`);
+  console.log(`AUTH_TOKEN_SECRET=${randomBytes(32).toString("base64url")}`);
 }
 
-const salt = randomBytes(16);
-const derived = await scrypt(password, salt, 32);
-const passwordHash = `$scrypt$16384$8$1$${salt.toString("base64url")}$${derived.toString("base64url")}`;
-console.log(`AUTH_PASSWORD_HASH=${passwordHash}`);
-console.log(`AUTH_TOKEN_SECRET=${randomBytes(32).toString("base64url")}`);
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : "生成认证配置失败。");
+  process.exit(1);
+});

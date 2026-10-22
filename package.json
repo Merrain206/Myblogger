@@ -2,6 +2,9 @@
   "name": "myblogger",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
@@ -10,9 +13,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test --test-concurrency=1 tests/*.test.ts",
     "test:rsc": "node scripts/check-rsc-cache.mjs",
-    "ws-server": "tsx server/ws-server.ts",
+    "ws-server": "node --env-file=.env.local --import tsx server/ws-server.ts",
     "auth:generate": "tsx scripts/generate-auth-config.ts",
-    "db:migrate": "tsx scripts/migrate-json-to-sqlite.ts"
+    "db:migrate": "node --env-file=.env.local --import tsx scripts/migrate-json-to-sqlite.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",

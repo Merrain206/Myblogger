@@ -16,7 +16,7 @@
 npm run db:migrate
 ```
 
-脚本会先在原 JSON 旁创建带时间戳的备份，再幂等插入 SQLite；不会删除或覆盖原 JSON。核对记录数并备份数据库后，才可人工归档旧 JSON。SQLite 已启用 WAL、事务、唯一约束和 busy timeout。
+该命令会通过 Node 的 `--env-file=.env.local` 显式加载数据库路径。脚本会先在原 JSON 旁创建带时间戳的备份，再幂等插入 SQLite；不会删除或覆盖原 JSON。核对记录数并备份数据库后，才可人工归档旧 JSON。SQLite 已启用 WAL、事务、唯一约束和 busy timeout。
 
 ## Nginx、HTTPS 与 HSTS
 

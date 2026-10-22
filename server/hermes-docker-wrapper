@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/bin/sudo -n /usr/local/sbin/myblogger-hermes-docker "$@"

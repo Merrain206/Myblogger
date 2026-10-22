@@ -33,7 +33,19 @@ HTTP 必须返回 `301` 或 `308`，HTTPS 才能返回 `200`。确认所有相�
 
 ## Docker 同步最小权限
 
-应用不再调用 shell，也不再使用 `sudo docker`。不要给 Web 服务用户通用 sudo 或 Docker 管理权限，因为 Docker 权限等价于主机 root。推荐使用一个只允许“列出指定目录并复制白名单文件”的独立同步服务或受限 Unix socket 代理，并让本应用调用该服务。
+应用不再调用 shell，也不直接使用 `sudo docker`。不要给 Web 服务用户通用 sudo 或 Docker 管理权限，因为 Docker 权限等价于主机 root。仓库提供了只允许“列出固定容器目录并复制白名单图片到固定私有目录”的生产桥：
+
+```bash
+sudo install -o root -g root -m 0755 server/hermes-docker-bridge /usr/local/sbin/myblogger-hermes-docker
+sudo install -d -o root -g root -m 0755 /usr/local/libexec/myblogger
+sudo install -o root -g root -m 0755 server/hermes-docker-wrapper /usr/local/libexec/myblogger/docker
+sudo visudo -cf server/hermes-docker-bridge.sudoers
+sudo install -o root -g root -m 0440 server/hermes-docker-bridge.sudoers /etc/sudoers.d/myblogger-hermes-docker
+sudo chown root:ubuntu /home/ubuntu/myblogger-data/hermes
+sudo chmod 0750 /home/ubuntu/myblogger-data/hermes
+```
+
+启动 Web 进程时，将 `/usr/local/libexec/myblogger` 放在 `PATH` 最前。桥脚本为 root 所有并再次校验参数、容器名、源目录、目标目录和文件名；sudoers 只允许调用该脚本。部署后应确认任意其他 Docker 参数返回拒绝，并通过已认证的 `/api/hermes/sync` 做一次回归。
 
 ## CSP 上线步骤
 

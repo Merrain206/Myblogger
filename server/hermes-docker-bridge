@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly CONTAINER="hermes-agent"
+readonly CONTAINER_DIRECTORY="/opt/data/memory"
+readonly DESTINATION_DIRECTORY="/home/ubuntu/myblogger-data/hermes"
+
+deny() {
+  echo "hermes docker operation denied" >&2
+  exit 64
+}
+
+if [[ $# -eq 10
+  && "$1" == "exec"
+  && "$2" == "$CONTAINER"
+  && "$3" == "find"
+  && "$4" == "$CONTAINER_DIRECTORY"
+  && "$5" == "-maxdepth"
+  && "$6" == "1"
+  && "$7" == "-type"
+  && "$8" == "f"
+  && "$9" == "-printf"
+  && "${10}" == '%f\n' ]]; then
+  exec /usr/bin/docker exec "$CONTAINER" find "$CONTAINER_DIRECTORY" \
+    -maxdepth 1 -type f -printf '%f\n'
+fi
+
+if [[ $# -ne 4 || "$1" != "cp" || "$2" != "--" ]]; then
+  deny
+fi
+
+readonly source_path="$3"
+readonly target_path="$4"
+readonly source_prefix="${CONTAINER}:${CONTAINER_DIRECTORY}/"
+[[ "$source_path" == "$source_prefix"* ]] || deny
+
+readonly filename="${source_path#"$source_prefix"}"
+[[ "$filename" =~ ^[A-Za-z0-9_-]{1,120}\.(svg|png|jpg|jpeg|gif|webp)$ ]] || deny
+[[ "$target_path" == "$DESTINATION_DIRECTORY/$filename" ]] || deny
+[[ -d "$DESTINATION_DIRECTORY" && ! -L "$DESTINATION_DIRECTORY" ]] || deny
+
+temporary_directory="$(mktemp -d "$DESTINATION_DIRECTORY/.sync.XXXXXXXX")"
+cleanup() {
+  rm -rf -- "$temporary_directory"
+}
+trap cleanup EXIT
+
+/usr/bin/docker cp -- "$source_path" "$temporary_directory/$filename"
+/usr/bin/chown root:ubuntu "$temporary_directory/$filename"
+/usr/bin/chmod 0640 "$temporary_directory/$filename"
+/usr/bin/mv -fT "$temporary_directory/$filename" "$target_path"

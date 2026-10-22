@@ -6,7 +6,7 @@
 
 仓库内可执行的高风险修复已经完成并通过自动化验证。生产依赖 `npm audit --omit=dev` 为 0 漏洞；17 项安全测试、TypeScript、lint、Next.js 生产构建与 RSC/HTML 缓存隔离回归均通过。
 
-生产密钥轮换、Cloudflare 规则、HSTS、Docker 最小权限和 Git 历史重写没有自动执行，必须在代码审查后按本文与 `docs/` 手册人工完成。
+修复版本已部署到生产源站；管理员密码与会话签名密钥已重新生成，JSON 已迁移到 SQLite，Nginx 与最小权限 Docker 桥已上线。Cloudflare 规则、源站证书恢复、HSTS、DeepSeek 平台密钥轮换和 Git 历史重写仍需按 `docs/` 手册完成。
 
 ## 漏洞修复与验证
 
@@ -68,7 +68,7 @@
 | `npm run lint` | 通过，0 error；保留 13 个既有非阻断 warning |
 | `npm test` | 17/17 通过 |
 | `npm run build` | Next.js 16.4.2 生产构建通过 |
-| `npm run test:rsc` | RSC/HTML 隔离与 HTML no-store 通过 |
+| `npm run test:rsc` | 源站 RSC/HTML 隔离与 HTML no-store 通过；Cloudflare 公网因旧缓存规则仍失败 |
 | `npm audit --omit=dev --json` | 0 vulnerabilities |
 | `git diff --check` | 通过；仅有 Windows 行尾提示 |
 
@@ -81,25 +81,34 @@
 - 框架与依赖：`package.json`、`package-lock.json`、`next.config.ts`、`eslint.config.mjs`、`tsconfig.json`、`src/app/layout.tsx`、`src/lib/posts.ts`、`README.md`。
 - 测试与脚本：`tests/*`、`scripts/check-rsc-cache.mjs`、`scripts/generate-auth-config.ts`。
 - 运维文档：`docs/cloudflare-security-runbook.md`、`docs/deployment-security.md`、`docs/git-history-cleanup.md`、`docs/security-incident-response.md`、`docs/npm-audit-summary.md`、`public/.well-known/security.txt`。
+- 最小权限同步桥：`server/hermes-docker-bridge`、`server/hermes-docker-wrapper`、`server/hermes-docker-bridge.sudoers`。
 - 索引删除：`Tickets/pdfs/*.pdf`（19 份）和 `src/data/gomoku-scores.json`。
 
 未修改用户原有的 `.claude/settings.local.json`、`.playwright-mcp/`、`src/.claude/`、`src/pictures/`、本地 PDF 或数据库文件。
 
+## 生产部署结果
+
+- 生产运行时固定到用户级 Node.js 24.22.1 LTS；系统 Node 未替换。PM2 的 Web 与 WebSocket 进程均在线并已保存自启动快照。
+- 生产环境变量文件权限为 600；数据库与 Hermes 媒体位于代码目录之外。迁移导入 4 条档案、10 条历史练习成绩，原 JSON 和部署前备份均保留。
+- 源站 HTTP 返回 301，HTTPS HTML 返回 `private, no-store`，敏感 API 未登录返回 401，CSP Report-Only 生效且不含 `X-Powered-By`。
+- Hermes 桥只允许固定容器目录的 `find` 和白名单图片 `cp`；任意 Docker 命令被拒绝。真实登录、CSRF、同步、注销链路通过。
+- 生产依赖审计为 0 漏洞；Linux 上 17/17 测试、类型检查、lint（0 error、13 warning）和生产构建通过。
+- 部署前完整备份与上一版本目录均保留，可用于回滚。
+
 ## 待人工执行（按优先级）
 
-1. **P0：立即轮换**管理员密码、AUTH_TOKEN_SECRET 和可能暴露的 DeepSeek/API Key；重启所有实例。
-2. **P0：暂时私有化仓库并清理 Git 历史**，协调协作者、fork、release、artifact 和缓存后再强制推送。
-3. **P0：部署 Cloudflare 缓存绕过并 Purge Everything**，随后运行线上 RSC 回归。
-4. **P1：配置生产环境变量与私有目录权限**，停写后运行 JSON→SQLite 迁移并核对备份/记录数。
-5. **P1：部署 Nginx 配置并验证 HTTP→HTTPS**；所有域名稳定后再逐步启用 HSTS。
-6. **P1：移除 Web 用户的通用 sudo/docker 权限**，部署最小权限同步服务。
-7. **P2：收集 CSP Report-Only 报告**，完成 nonce 方案后切换强制 CSP。
+1. **P0：恢复源站证书。** 当前 `merrain.cn`/`www.merrain.cn` 源站证书已过期，Certbot HTTP-01 被 Cloudflare 返回 404；按 Cloudflare 手册临时灰云续期，恢复橙云后切换 Full (strict)。
+2. **P0：部署 Cloudflare 缓存绕过并 Purge Everything。** 当前公网仍命中旧 HTML 缓存，RSC 请求会收到 `text/html`；清理后必须运行线上 RSC 回归。
+3. **P0：暂时私有化仓库并清理 Git 历史**，协调协作者、fork、release、artifact 和缓存后再强制推送。
+4. **P0：通过 SSH 取回初始管理员密码后删除服务器上的一次性明文文件**；在 DeepSeek 平台检查并视暴露情况轮换 API Key。
+5. **P1：所有域名和子域 HTTPS 稳定后逐步启用 HSTS**，首次不要启用 `includeSubDomains` 或 preload。
+6. **P2：收集 CSP Report-Only 报告**，完成 nonce 方案后切换强制 CSP。
 
 ## 残余风险
 
 - CSP 目前为 Report-Only，尚未强制；这是为避免未经线上报告验证就破坏 Next.js hydration/Giscus。
-- HSTS 尚未启用，需先验证所有 HTTPS 子域和回源。
-- Node 内置 SQLite 在当前运行时仍打印 experimental warning；生产需固定并验证 Node 版本。
+- HSTS 尚未启用，且源站证书当前已过期；需先完成证书恢复并验证所有 HTTPS 子域和回源。
+- Cloudflare 仍在缓存旧 HTML；在缓存规则和 Purge 完成前，公网 RSC/HTML 隔离验收不通过。
 - 登录与 WebSocket 的短周期限流为单进程内存状态；多实例部署应迁移到 Redis 等共享限流存储。每日 AI 配额已由 SQLite 统一持久化。
 - 全量 `npm audit` 仍报告开发工具链漏洞，涉及 eslint-config-next、Tailwind 3 及其 glob/watch 依赖；它们不在生产依赖树中，`--omit=dev` 为 0。升级到 Tailwind 4 会产生破坏性迁移，需单独安排。CI 不应处理攻击者可控的文件路径或启动不可信 watch 输入。
 - Git 历史、远程 fork/CDN 和生产缓存中的旧数据不会因当前工作区修改自动消失。

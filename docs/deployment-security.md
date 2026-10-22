@@ -3,7 +3,7 @@
 ## 运行时与密钥
 
 1. 使用 Node.js 22.5 或更高版本；当前 SQLite 实现使用 Node 内置 `node:sqlite`。建议生产固定到 Node 24 LTS 并在升级时重跑全部测试。
-2. 运行 `npm run auth:generate`，将输出写入服务器的密钥管理或 PM2 环境，不要写入仓库、工单或聊天记录。
+2. 运行 `npm run auth:generate`，将输出写入服务器的 `.env.local` 或密钥管理，不要写入仓库、工单或聊天记录。生成的哈希已对 dotenv 的 `$` 展开做转义，认证读取端也兼容直接注入环境变量。
 3. 配置 `.env.example` 中的必需变量。生产至少需要 `AUTH_PASSWORD_HASH`、`AUTH_TOKEN_SECRET`、`ALLOWED_ORIGINS`、`DATABASE_PATH` 和 `DEEPSEEK_API_KEY`。
 4. `AUTH_TOKEN_SECRET` 必须是至少 32 字节的密码学随机值。每次轮换都会令旧 Cookie 立即失效。
 5. 数据库和 Hermes 私有媒体目录只授予 Web 服务账户读写权限，不放在 `public/` 下。

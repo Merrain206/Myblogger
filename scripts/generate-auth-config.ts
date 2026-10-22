@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   const salt = randomBytes(16);
   const derived = await scrypt(password, salt, 32);
   const passwordHash = `$scrypt$16384$8$1$${salt.toString("base64url")}$${derived.toString("base64url")}`;
-  console.log(`AUTH_PASSWORD_HASH=${passwordHash}`);
+  console.log(`AUTH_PASSWORD_HASH=${passwordHash.replaceAll("$", "\\$")}`);
   console.log(`AUTH_TOKEN_SECRET=${randomBytes(32).toString("base64url")}`);
 }
 

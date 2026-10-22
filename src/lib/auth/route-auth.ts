@@ -43,7 +43,7 @@ export type AuthResult =
   | { ok: false; response: NextResponse };
 
 function readConfig(): AuthConfig | null {
-  const passwordHash = process.env.AUTH_PASSWORD_HASH?.trim();
+  const passwordHash = process.env.AUTH_PASSWORD_HASH?.trim().replaceAll("\\$", "$");
   const rawSecret = process.env.AUTH_TOKEN_SECRET?.trim();
   const ttlValue = Number(process.env.AUTH_TOKEN_TTL_SECONDS || DEFAULT_TTL_SECONDS);
 

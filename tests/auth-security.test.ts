@@ -46,6 +46,11 @@ test("scrypt 密码校验与 HttpOnly 会话 Cookie", async () => {
   assert.equal(await validatePassword(password), true);
   assert.equal(await validatePassword("wrong password"), false);
 
+  const rawHash = process.env.AUTH_PASSWORD_HASH || "";
+  process.env.AUTH_PASSWORD_HASH = rawHash.replaceAll("$", "\\$");
+  assert.equal(await validatePassword(password), true);
+  process.env.AUTH_PASSWORD_HASH = rawHash;
+
   const session = createAuthSession();
   assert.ok(session);
   assert.ok(verifyToken(session.token));

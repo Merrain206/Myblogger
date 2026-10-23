@@ -58,7 +58,7 @@
 - 旧 `src/data/gomoku-scores.json` 已从索引移除，本地文件保留供迁移。
 - `.gitignore` 新增票据、OCR、私有 JSON、数据库、WAL、备份和所有 `.env*`（保留 `.env.example`）。
 - 当前被跟踪树的秘密扫描未发现命中；两处 18 位数字正则命中均不含有效日期，判定为非身份证号格式。
-- 已改写全部 59 个提交：删除 19 份票据 PDF 和旧比分 JSON，并替换旧固定密码与固定 HMAC 密钥；改写后的路径、原值和 Gitleaks 扫描均为 0 命中。
+- 已改写全部历史：删除 19 份票据 PDF、旧比分 JSON 和一份 52.12 MiB 的旧 PPTX，并替换旧固定密码与固定 HMAC 密钥；改写后的路径、原值和 Gitleaks 扫描均为 0 命中，历史中已无大于等于 5 MiB 的 blob。
 - GitHub `main` 已强制更新且全新 clone 验证通过；旧提交仍可按 SHA 获取，平台侧清除步骤见 `docs/git-history-cleanup.md`。
 
 ## 验证命令与结果
@@ -73,7 +73,7 @@
 | `npm audit --omit=dev --json` | 0 vulnerabilities |
 | `git diff --check` | 通过；仅有 Windows 行尾提示 |
 | Gitleaks 完整历史扫描 | 59 个提交，0 命中 |
-| 改写对象检查 | 20 个旧私密文件对象均不可达；旧密码和 HMAC 原值均为 0 次残留 |
+| 改写对象检查 | 21 个旧私密或大型文件对象均不可达；旧密码和 HMAC 原值均为 0 次残留 |
 
 ## 修改文件
 

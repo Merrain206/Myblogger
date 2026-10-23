@@ -1,12 +1,12 @@
 # 安全修复报告
 
-日期：2026-10-22
+日期：2026-10-23
 
 ## 结论
 
 仓库内可执行的高风险修复已经完成并通过自动化验证。生产依赖 `npm audit --omit=dev` 为 0 漏洞；17 项安全测试、TypeScript、lint、Next.js 生产构建与 RSC/HTML 缓存隔离回归均通过。
 
-修复版本已部署到生产源站；管理员密码与会话签名密钥已重新生成，JSON 已迁移到 SQLite，Nginx 与最小权限 Docker 桥已上线。Cloudflare 规则、源站证书恢复、HSTS、DeepSeek 平台密钥轮换和 Git 历史重写仍需按 `docs/` 手册完成。
+修复版本已部署到生产源站；管理员密码与会话签名密钥已重新生成，JSON 已迁移到 SQLite，Nginx 与最小权限 Docker 桥已上线。Cloudflare 缓存规则、源站证书、隧道路由和公网端口均已完成加固；仓库已设为私有。HSTS、DeepSeek 平台密钥轮换和 Git 历史重写仍需按下文条件处理。
 
 ## 漏洞修复与验证
 
@@ -94,22 +94,32 @@
 - Hermes 桥只允许固定容器目录的 `find` 和白名单图片 `cp`；任意 Docker 命令被拒绝。真实登录、CSRF、同步、注销链路通过。
 - 生产依赖审计为 0 漏洞；Linux 上 17/17 测试、类型检查、lint（0 error、13 warning）和生产构建通过。
 - 部署前完整备份与上一版本目录均保留，可用于回滚。
+- Cloudflare 已使用保守缓存绕过规则并完成清缓存；线上 RSC/HTML 隔离回归通过，敏感 API 返回 `401`、`private, no-store` 和动态缓存状态。
+- `merrain.cn`/`www.merrain.cn` 源站证书已通过 DNS-01 续期至 2027-01-20，自动续期 dry-run 通过，Cloudflare 为 Full (strict)、Always Use HTTPS、最低 TLS 1.2。
+- Cloudflare Tunnel 的路径规则已改为完整锚定，避免 `/api/hermes/*` 被 `/hermes` 规则误匹配；Hermes API 不再发生重定向循环。
+- 已移除失效且产生自重定向的 `/taichi`、`/hermes` Tunnel 入口；Hermes 只保留正式的 `/tools/hermes` 和鉴权 API。
+- UFW 默认拒绝入站，仅开放 SSH 22；Nginx、Next、WebSocket、NCM、Hermes 和辅助端口均只绑定回环地址，由 Cloudflare Tunnel 回源。
+- SSH 已禁用 root、密码、键盘交互、X11、Agent 转发和 Tunnel，仅允许密钥认证；Fail2ban 的 `sshd` jail 已启用并采用递增封禁。
+- Hermes 容器使用 Docker Compose v2，所有 `8642`、`9000-9050` 端口只绑定 `127.0.0.1`。
+- NCM 已从 root PM2 迁移到 `ubuntu` 账户运行，空闲的 root PM2 自启动已停用。
+- Ubuntu 安全更新来源已修正为 `jammy-security`，自动重启保持关闭；2026-10-23 已补装积累的安全更新并受控重启到 `5.15.0-198-generic`。已卸载启用但不需要的 telnet/inetd。
+- GitHub 仓库已设为私有；安全修复通过普通提交推送，未改写历史。
 
 ## 待人工执行（按优先级）
 
-1. **P0：恢复源站证书。** 当前 `merrain.cn`/`www.merrain.cn` 源站证书已过期，Certbot HTTP-01 被 Cloudflare 返回 404；按 Cloudflare 手册临时灰云续期，恢复橙云后切换 Full (strict)。
-2. **P0：部署 Cloudflare 缓存绕过并 Purge Everything。** 当前公网仍命中旧 HTML 缓存，RSC 请求会收到 `text/html`；清理后必须运行线上 RSC 回归。
-3. **P0：暂时私有化仓库并清理 Git 历史**，协调协作者、fork、release、artifact 和缓存后再强制推送。
-4. **P0：通过 SSH 取回初始管理员密码后删除服务器上的一次性明文文件**；在 DeepSeek 平台检查并视暴露情况轮换 API Key。
-5. **P1：所有域名和子域 HTTPS 稳定后逐步启用 HSTS**，首次不要启用 `includeSubDomains` 或 preload。
-6. **P2：收集 CSP Report-Only 报告**，完成 nonce 方案后切换强制 CSP。
+1. **P0：在 DeepSeek 平台轮换 API Key**，再只更新服务器密钥并重启应用；该平台账户操作无法由仓库或服务器侧验证完成。
+2. **P0：确认初始管理员密码已存入密码管理器**，随后删除服务器上的一次性明文文件 `/home/ubuntu/.merrain-initial-admin-password`。
+3. **P1：决定 `teach.merrain.cn` 的去留。** 该独立 Tunnel 当前返回 Cloudflare 530；修复或删除其 DNS 后，再逐步启用 HSTS，初期不要启用 `includeSubDomains` 或 preload。
+4. **P1：在允许维护窗口和协作者重新克隆时改写 Git 历史。** 当前按明确要求暂不改写；仓库私有化只降低可见性，不能删除旧对象、fork、缓存或既有克隆中的副本。
+5. **P2：为 CSP Report-Only 配置收集端并观察合法流量**，完成 nonce 方案后切换强制 CSP。
+6. **P2：向腾讯云确认自定义 `cloud-init 20.1.0011-1` 的安全升级路径。** 该包被云厂商精确 pin，配置含 `TencentCloud` 数据源；不要直接取消 pin 并换成 Ubuntu 官方包。若需要消除另外两个 ESM Apps 提示，可为系统启用 Ubuntu Pro，或确认不再需要系统 `python3-pip`/`python3-venv` 后再卸载。
 
 ## 残余风险
 
 - CSP 目前为 Report-Only，尚未强制；这是为避免未经线上报告验证就破坏 Next.js hydration/Giscus。
-- HSTS 尚未启用，且源站证书当前已过期；需先完成证书恢复并验证所有 HTTPS 子域和回源。
-- Cloudflare 仍在缓存旧 HTML；在缓存规则和 Purge 完成前，公网 RSC/HTML 隔离验收不通过。
+- HSTS 尚未启用；主站证书和回源已恢复，但独立的 `teach.merrain.cn` 仍返回 Cloudflare 530，暂不启用 `includeSubDomains` 或 preload。
 - 登录与 WebSocket 的短周期限流为单进程内存状态；多实例部署应迁移到 Redis 等共享限流存储。每日 AI 配额已由 SQLite 统一持久化。
+- 腾讯云定制 `cloud-init` 被厂商 pin，Ubuntu 报告有一个官方标准安全版本但不会自动替换；它不监听公网，强制升级的启动风险高于当前远程攻击面，需由云厂商确认。另有两个仅属于 ESM Apps 的系统 pip 工具更新，应用生产依赖审计不受影响。
 - 全量 `npm audit` 仍报告开发工具链漏洞，涉及 eslint-config-next、Tailwind 3 及其 glob/watch 依赖；它们不在生产依赖树中，`--omit=dev` 为 0。升级到 Tailwind 4 会产生破坏性迁移，需单独安排。CI 不应处理攻击者可控的文件路径或启动不可信 watch 输入。
-- Git 历史、远程 fork/CDN 和生产缓存中的旧数据不会因当前工作区修改自动消失。
+- Git 历史仍包含旧认证实现和 19 份票据路径；仓库虽已私有，但远程 fork、缓存和既有克隆中的旧数据不会因当前工作区修改自动消失。
 - WebSocket 排行榜结果由服务器验证，但玩家仍是 Guest 1/Guest 2，并不代表已认证用户身份。

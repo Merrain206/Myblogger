@@ -292,6 +292,7 @@ function handleMessage(ws: WebSocket, state: ConnectionState, message: ClientMes
 }
 
 const wss = new WebSocketServer({
+  host: "127.0.0.1",
   port: PORT,
   maxPayload: MAX_PAYLOAD,
   perMessageDeflate: false,

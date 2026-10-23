@@ -31,6 +31,16 @@ curl -sSI https://merrain.cn/ | head
 
 HTTP 必须返回 `301` 或 `308`，HTTPS 才能返回 `200`。确认所有相关子域、证书、回源和重定向均正常后，再人工启用 HSTS。首次建议短 `max-age`；验证稳定后逐步提高，最后才考虑 `includeSubDomains` 与 preload。
 
+## 主机与隧道基线
+
+1. UFW 默认拒绝入站，只开放密钥认证的 SSH；Next、Nginx、WebSocket、NCM 和容器服务均绑定 `127.0.0.1`，通过 Cloudflare Tunnel 回源，不直接开放公网端口。
+2. SSH 禁用 root、密码、键盘交互、X11、Agent 转发和 Tunnel，并启用 Fail2ban `sshd` jail。修改后先运行 `sshd -t`，保持现有会话并用新会话验证成功后再退出。
+3. Tunnel 的路径正则必须完整锚定，例如 `^/hermes(/.*)?$`；未经锚定的 `/hermes` 会误匹配 `/api/hermes/*` 并产生回源错误或重定向循环。
+4. Docker 发布端口显式绑定 `127.0.0.1`。部署机使用 Docker Compose v2；不要使用已停止维护的 Compose v1 重建容器。
+5. `unattended-upgrades` 必须允许 `${distro_id}:${distro_codename}-security`，自动重启保持关闭，由维护窗口人工重启并验证服务。
+6. 不运行 telnet/inetd；NCM 等非特权端口服务使用 `ubuntu` 账户和固定的 Node 24，不使用 root PM2。
+7. 云厂商精确 pin 的 `cloud-init` 不得自行取消固定。先向云厂商确认其自定义数据源在目标官方版本中受支持，再安排带控制台回滚能力的维护窗口。
+
 ## Docker 同步最小权限
 
 应用不再调用 shell，也不直接使用 `sudo docker`。不要给 Web 服务用户通用 sudo 或 Docker 管理权限，因为 Docker 权限等价于主机 root。仓库提供了只允许“列出固定容器目录并复制白名单图片到固定私有目录”的生产桥：

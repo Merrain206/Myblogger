@@ -51,6 +51,18 @@
 5. SSL/TLS → Edge Certificates 开启 Always Use HTTPS。
 6. 所有 HTTPS 和子域验证完成后再启用 HSTS；首次使用较短 `max-age`，暂不勾选 `includeSubDomains` 和 preload。
 
+## Tunnel 路由检查
+
+Cloudflare Tunnel 的 `path` 使用正则匹配。所有前缀路由都应同时锚定开头和结尾，例如 `^/ncm(/.*)?$`、`^/hermes(/.*)?$`；精确路由使用 `^/ws$`。修改后先执行：
+
+```bash
+cloudflared tunnel --config ~/.cloudflared/config.yml ingress validate
+```
+
+再重启 `cloudflared`，并分别验证公开路由和同名前缀的应用 API。不要使用未锚定的 `/hermes`，否则它也会匹配 `/api/hermes/*`。
+
+删除服务后也要同步删除对应 ingress；不要把不存在的 `/hermes`、`/taichi` 等前缀继续指向会跳回同一 HTTPS URL 的 Nginx HTTP 重定向，否则会形成自重定向循环。
+
 ## 发布后清缓存
 
 1. 发布并完成源站检查。

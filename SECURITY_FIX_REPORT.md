@@ -6,7 +6,7 @@
 
 仓库内可执行的高风险修复已经完成并通过自动化验证。生产依赖 `npm audit --omit=dev` 为 0 漏洞；17 项安全测试、TypeScript、lint、Next.js 生产构建与 RSC/HTML 缓存隔离回归均通过。
 
-修复版本已部署到生产源站；管理员密码与会话签名密钥已重新生成，JSON 已迁移到 SQLite，Nginx 与最小权限 Docker 桥已上线。Cloudflare 缓存规则、源站证书、隧道路由和公网端口均已完成加固；仓库已设为私有。HSTS、DeepSeek 平台密钥轮换和 Git 历史重写仍需按下文条件处理。
+修复版本已部署到生产源站；管理员密码与会话签名密钥已重新生成，JSON 已迁移到 SQLite，Nginx 与最小权限 Docker 桥已上线。Cloudflare 缓存规则、源站证书、隧道路由和公网端口均已完成加固；仓库已设为私有。Git 分支历史已改写并通过扫描，但 GitHub 仍能按旧 SHA 返回不可达对象，必须由 GitHub Support 完成服务端清除后才能公开。HSTS 和 DeepSeek 平台密钥轮换仍需按下文条件处理。
 
 ## 漏洞修复与验证
 
@@ -58,7 +58,8 @@
 - 旧 `src/data/gomoku-scores.json` 已从索引移除，本地文件保留供迁移。
 - `.gitignore` 新增票据、OCR、私有 JSON、数据库、WAL、备份和所有 `.env*`（保留 `.env.example`）。
 - 当前被跟踪树的秘密扫描未发现命中；两处 18 位数字正则命中均不含有效日期，判定为非身份证号格式。
-- 历史扫描仍定位到旧认证实现和 19 个票据路径，清理步骤见 `docs/git-history-cleanup.md`。
+- 已改写全部 59 个提交：删除 19 份票据 PDF 和旧比分 JSON，并替换旧固定密码与固定 HMAC 密钥；改写后的路径、原值和 Gitleaks 扫描均为 0 命中。
+- GitHub `main` 已强制更新且全新 clone 验证通过；旧提交仍可按 SHA 获取，平台侧清除步骤见 `docs/git-history-cleanup.md`。
 
 ## 验证命令与结果
 
@@ -71,6 +72,8 @@
 | `npm run test:rsc` | 源站 RSC/HTML 隔离与 HTML no-store 通过；Cloudflare 公网因旧缓存规则仍失败 |
 | `npm audit --omit=dev --json` | 0 vulnerabilities |
 | `git diff --check` | 通过；仅有 Windows 行尾提示 |
+| Gitleaks 完整历史扫描 | 59 个提交，0 命中 |
+| 改写对象检查 | 20 个旧私密文件对象均不可达；旧密码和 HMAC 原值均为 0 次残留 |
 
 ## 修改文件
 
@@ -103,14 +106,14 @@
 - Hermes 容器使用 Docker Compose v2，所有 `8642`、`9000-9050` 端口只绑定 `127.0.0.1`。
 - NCM 已从 root PM2 迁移到 `ubuntu` 账户运行，空闲的 root PM2 自启动已停用。
 - Ubuntu 安全更新来源已修正为 `jammy-security`，自动重启保持关闭；2026-10-23 已补装积累的安全更新并受控重启到 `5.15.0-198-generic`。已卸载启用但不需要的 telnet/inetd。
-- GitHub 仓库已设为私有；安全修复通过普通提交推送，未改写历史。
+- GitHub 仓库保持私有；`main` 历史已改写并强制推送，全新 clone 的 tip 与改写镜像一致。
 
 ## 待人工执行（按优先级）
 
 1. **P0：在 DeepSeek 平台轮换 API Key**，再只更新服务器密钥并重启应用；该平台账户操作无法由仓库或服务器侧验证完成。
 2. **P0：确认初始管理员密码已存入密码管理器**，随后删除服务器上的一次性明文文件 `/home/ubuntu/.merrain-initial-admin-password`。
 3. **P1：决定 `teach.merrain.cn` 的去留。** 该独立 Tunnel 当前返回 Cloudflare 530；修复或删除其 DNS 后，再逐步启用 HSTS，初期不要启用 `includeSubDomains` 或 preload。
-4. **P1：在允许维护窗口和协作者重新克隆时改写 Git 历史。** 当前按明确要求暂不改写；仓库私有化只降低可见性，不能删除旧对象、fork、缓存或既有克隆中的副本。
+4. **P0：向 GitHub Support 请求服务端敏感数据清除。** 当前旧提交仍可按 SHA fetch；提交仓库名、0 个受影响 PR、First Changed Commit 和清理范围，请求删除缓存视图并执行垃圾回收。Support 完成且旧 SHA 无法访问前不得公开。
 5. **P2：为 CSP Report-Only 配置收集端并观察合法流量**，完成 nonce 方案后切换强制 CSP。
 6. **P2：向腾讯云确认自定义 `cloud-init 20.1.0011-1` 的安全升级路径。** 该包被云厂商精确 pin，配置含 `TencentCloud` 数据源；不要直接取消 pin 并换成 Ubuntu 官方包。若需要消除另外两个 ESM Apps 提示，可为系统启用 Ubuntu Pro，或确认不再需要系统 `python3-pip`/`python3-venv` 后再卸载。
 
@@ -121,5 +124,5 @@
 - 登录与 WebSocket 的短周期限流为单进程内存状态；多实例部署应迁移到 Redis 等共享限流存储。每日 AI 配额已由 SQLite 统一持久化。
 - 腾讯云定制 `cloud-init` 被厂商 pin，Ubuntu 报告有一个官方标准安全版本但不会自动替换；它不监听公网，强制升级的启动风险高于当前远程攻击面，需由云厂商确认。另有两个仅属于 ESM Apps 的系统 pip 工具更新，应用生产依赖审计不受影响。
 - 全量 `npm audit` 仍报告开发工具链漏洞，涉及 eslint-config-next、Tailwind 3 及其 glob/watch 依赖；它们不在生产依赖树中，`--omit=dev` 为 0。升级到 Tailwind 4 会产生破坏性迁移，需单独安排。CI 不应处理攻击者可控的文件路径或启动不可信 watch 输入。
-- Git 历史仍包含旧认证实现和 19 份票据路径；仓库虽已私有，但远程 fork、缓存和既有克隆中的旧数据不会因当前工作区修改自动消失。
+- 分支历史和全新 clone 已不含旧认证秘密、票据 PDF 与私有比分 JSON，但 GitHub 服务端仍可按旧 SHA 返回不可达对象；既有 clone 也不会因强制推送自动清理。
 - WebSocket 排行榜结果由服务器验证，但玩家仍是 Guest 1/Guest 2，并不代表已认证用户身份。

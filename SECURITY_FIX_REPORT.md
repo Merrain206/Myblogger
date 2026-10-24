@@ -111,7 +111,7 @@
 ## 待人工执行（按优先级）
 
 1. **P0：在 DeepSeek 平台轮换 API Key**，再只更新服务器密钥并重启应用；该平台账户操作无法由仓库或服务器侧验证完成。
-2. **P0：确认初始管理员密码已存入密码管理器**，随后删除服务器上的一次性明文文件 `/home/ubuntu/.merrain-initial-admin-password`。
+2. **已完成：初始管理员密码已存入密码管理器**，服务器上的一次性明文文件 `/home/ubuntu/.merrain-initial-admin-password` 已删除并验证不存在。
 3. **P1：决定 `teach.merrain.cn` 的去留。** 该独立 Tunnel 当前返回 Cloudflare 530；修复或删除其 DNS 后，再逐步启用 HSTS，初期不要启用 `includeSubDomains` 或 preload。
 4. **P0：向 GitHub Support 请求服务端敏感数据清除。** 当前旧提交仍可按 SHA fetch；提交仓库名、0 个受影响 PR、First Changed Commit 和清理范围，请求删除缓存视图并执行垃圾回收。Support 完成且旧 SHA 无法访问前不得公开。
 5. **P2：为 CSP Report-Only 配置收集端并观察合法流量**，完成 nonce 方案后切换强制 CSP。
@@ -125,4 +125,5 @@
 - 腾讯云定制 `cloud-init` 被厂商 pin，Ubuntu 报告有一个官方标准安全版本但不会自动替换；它不监听公网，强制升级的启动风险高于当前远程攻击面，需由云厂商确认。另有两个仅属于 ESM Apps 的系统 pip 工具更新，应用生产依赖审计不受影响。
 - 全量与生产依赖 `npm audit` 当前均为 0；Dependabot 已配置为每周检查 npm 与 GitHub Actions 更新，CI 会自动执行类型检查、lint、测试和构建。依赖状态仍会随新公告变化，应持续处理后续告警。
 - 分支历史和全新 clone 已不含旧认证秘密、票据 PDF 与私有比分 JSON，但 GitHub 服务端仍可按旧 SHA 返回不可达对象；既有 clone 也不会因强制推送自动清理。
+- `/download/hackathon/` 已关闭公网访问并返回 404；服务器原文件未删除。`/ncm/` 按业务需要继续保留公网访问。
 - WebSocket 排行榜结果由服务器验证，但玩家仍是 Guest 1/Guest 2，并不代表已认证用户身份。

@@ -123,6 +123,6 @@
 - HSTS 尚未启用；主站证书和回源已恢复，但独立的 `teach.merrain.cn` 仍返回 Cloudflare 530，暂不启用 `includeSubDomains` 或 preload。
 - 登录与 WebSocket 的短周期限流为单进程内存状态；多实例部署应迁移到 Redis 等共享限流存储。每日 AI 配额已由 SQLite 统一持久化。
 - 腾讯云定制 `cloud-init` 被厂商 pin，Ubuntu 报告有一个官方标准安全版本但不会自动替换；它不监听公网，强制升级的启动风险高于当前远程攻击面，需由云厂商确认。另有两个仅属于 ESM Apps 的系统 pip 工具更新，应用生产依赖审计不受影响。
-- 全量与生产依赖 `npm audit` 当前均为 0；Dependabot 已配置为每周检查 npm 更新。依赖状态仍会随新公告变化，应持续处理后续告警。
+- 全量与生产依赖 `npm audit` 当前均为 0；Dependabot 已配置为每周检查 npm 与 GitHub Actions 更新，CI 会自动执行类型检查、lint、测试和构建。依赖状态仍会随新公告变化，应持续处理后续告警。
 - 分支历史和全新 clone 已不含旧认证秘密、票据 PDF 与私有比分 JSON，但 GitHub 服务端仍可按旧 SHA 返回不可达对象；既有 clone 也不会因强制推送自动清理。
 - WebSocket 排行榜结果由服务器验证，但玩家仍是 Guest 1/Guest 2，并不代表已认证用户身份。

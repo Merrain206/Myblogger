@@ -12,4 +12,4 @@
 - `brace-expansion`、Browserslist、`js-yaml`、esbuild 与 PostCSS selector parser 已更新到修复版本。
 - `npm audit --json` 与 `npm audit --omit=dev --json` 最终结果均为 0 个漏洞（critical/high/moderate/low 均为 0）。
 
-开发依赖仍应随月度维护窗口持续升级；`.github/dependabot.yml` 每周检查 npm 更新。
+开发依赖仍应随月度维护窗口持续升级；`.github/dependabot.yml` 每周检查 npm 与 GitHub Actions 更新。

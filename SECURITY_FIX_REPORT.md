@@ -110,10 +110,10 @@
 
 ## 待人工执行（按优先级）
 
-1. **P0：在 DeepSeek 平台轮换 API Key**，再只更新服务器密钥并重启应用；该平台账户操作无法由仓库或服务器侧验证完成。
+1. **P0：由仓库所有者在 DeepSeek 平台轮换 API Key**，再只更新服务器密钥并重启应用；完成前继续保持仓库私有。
 2. **已完成：初始管理员密码已存入密码管理器**，服务器上的一次性明文文件 `/home/ubuntu/.merrain-initial-admin-password` 已删除并验证不存在。
 3. **P1：决定 `teach.merrain.cn` 的去留。** 该独立 Tunnel 当前返回 Cloudflare 530；修复或删除其 DNS 后，再逐步启用 HSTS，初期不要启用 `includeSubDomains` 或 preload。
-4. **P0：向 GitHub Support 请求服务端敏感数据清除。** 当前旧提交仍可按 SHA fetch；提交仓库名、0 个受影响 PR、First Changed Commit 和清理范围，请求删除缓存视图并执行垃圾回收。Support 完成且旧 SHA 无法访问前不得公开。
+4. **处理中：GitHub Support 工单 #4896767 已提交。** 已请求删除缓存视图、对不可达对象执行垃圾回收并确认旧 SHA 不再可访问。Support 完成且复测旧 SHA 无法访问前不得公开。
 5. **P2：为 CSP Report-Only 配置收集端并观察合法流量**，完成 nonce 方案后切换强制 CSP。
 6. **P2：向腾讯云确认自定义 `cloud-init 20.1.0011-1` 的安全升级路径。** 该包被云厂商精确 pin，配置含 `TencentCloud` 数据源；不要直接取消 pin 并换成 Ubuntu 官方包。若需要消除另外两个 ESM Apps 提示，可为系统启用 Ubuntu Pro，或确认不再需要系统 `python3-pip`/`python3-venv` 后再卸载。
 

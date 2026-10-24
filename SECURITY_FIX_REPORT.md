@@ -120,7 +120,7 @@
 ## 残余风险
 
 - CSP 目前为 Report-Only，尚未强制；这是为避免未经线上报告验证就破坏 Next.js hydration/Giscus。
-- HSTS 尚未启用；主站证书和回源已恢复，但独立的 `teach.merrain.cn` 仍返回 Cloudflare 530，暂不启用 `includeSubDomains` 或 preload。
+- 主站已用 `max-age=86400` 短周期启用 HSTS；独立的 `teach.merrain.cn` 仍返回 Cloudflare 530，因此暂不启用 `includeSubDomains` 或 preload。确认稳定后再逐步延长主站 max-age。
 - 登录与 WebSocket 的短周期限流为单进程内存状态；多实例部署应迁移到 Redis 等共享限流存储。每日 AI 配额已由 SQLite 统一持久化。
 - 腾讯云定制 `cloud-init` 被厂商 pin，Ubuntu 报告有一个官方标准安全版本但不会自动替换；它不监听公网，强制升级的启动风险高于当前远程攻击面，需由云厂商确认。另有两个仅属于 ESM Apps 的系统 pip 工具更新，应用生产依赖审计不受影响。
 - 全量与生产依赖 `npm audit` 当前均为 0；Dependabot 已配置为每周检查 npm 与 GitHub Actions 更新，CI 会自动执行类型检查、lint、测试和构建。依赖状态仍会随新公告变化，应持续处理后续告警。

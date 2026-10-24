@@ -70,9 +70,9 @@
 | `npm test` | 17/17 通过 |
 | `npm run build` | Next.js 16.4.2 生产构建通过 |
 | `npm run test:rsc` | 源站 RSC/HTML 隔离与 HTML no-store 通过；Cloudflare 公网因旧缓存规则仍失败 |
-| `npm audit --omit=dev --json` | 0 vulnerabilities |
+| `npm audit --json` / `npm audit --omit=dev --json` | 全量与生产依赖均为 0 vulnerabilities |
 | `git diff --check` | 通过；仅有 Windows 行尾提示 |
-| Gitleaks 完整历史扫描 | 59 个提交，0 命中 |
+| Gitleaks 完整历史扫描 | 61 个可达提交，0 命中 |
 | 改写对象检查 | 21 个旧私密或大型文件对象均不可达；旧密码和 HMAC 原值均为 0 次残留 |
 
 ## 修改文件
@@ -87,7 +87,7 @@
 - 最小权限同步桥：`server/hermes-docker-bridge`、`server/hermes-docker-wrapper`、`server/hermes-docker-bridge.sudoers`。
 - 索引删除：`Tickets/pdfs/*.pdf`（19 份）和 `src/data/gomoku-scores.json`。
 
-未修改用户原有的 `.claude/settings.local.json`、`.playwright-mcp/`、`src/.claude/`、`src/pictures/`、本地 PDF 或数据库文件。
+本地 PDF、数据库文件以及 `.playwright-mcp/`、`src/.claude/`、`src/pictures/` 内容未被修改；这些本地工具或素材目录现已加入 `.gitignore`。`.claude/settings.local.json` 已从 Git 索引移除，但本地文件保留并被忽略。
 
 ## 生产部署结果
 
@@ -123,6 +123,6 @@
 - HSTS 尚未启用；主站证书和回源已恢复，但独立的 `teach.merrain.cn` 仍返回 Cloudflare 530，暂不启用 `includeSubDomains` 或 preload。
 - 登录与 WebSocket 的短周期限流为单进程内存状态；多实例部署应迁移到 Redis 等共享限流存储。每日 AI 配额已由 SQLite 统一持久化。
 - 腾讯云定制 `cloud-init` 被厂商 pin，Ubuntu 报告有一个官方标准安全版本但不会自动替换；它不监听公网，强制升级的启动风险高于当前远程攻击面，需由云厂商确认。另有两个仅属于 ESM Apps 的系统 pip 工具更新，应用生产依赖审计不受影响。
-- 全量 `npm audit` 仍报告开发工具链漏洞，涉及 eslint-config-next、Tailwind 3 及其 glob/watch 依赖；它们不在生产依赖树中，`--omit=dev` 为 0。升级到 Tailwind 4 会产生破坏性迁移，需单独安排。CI 不应处理攻击者可控的文件路径或启动不可信 watch 输入。
+- 全量与生产依赖 `npm audit` 当前均为 0；Dependabot 已配置为每周检查 npm 更新。依赖状态仍会随新公告变化，应持续处理后续告警。
 - 分支历史和全新 clone 已不含旧认证秘密、票据 PDF 与私有比分 JSON，但 GitHub 服务端仍可按旧 SHA 返回不可达对象；既有 clone 也不会因强制推送自动清理。
 - WebSocket 排行榜结果由服务器验证，但玩家仍是 Guest 1/Guest 2，并不代表已认证用户身份。

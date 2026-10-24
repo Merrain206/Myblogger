@@ -13,6 +13,10 @@ build/
 # misc
 .DS_Store
 *.pem
+.claude/settings.local.json
+.playwright-mcp/
+src/.claude/
+src/pictures/
 
 # debug
 npm-debug.log*

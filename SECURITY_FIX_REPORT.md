@@ -72,7 +72,7 @@
 | `npm run test:rsc` | 源站 RSC/HTML 隔离与 HTML no-store 通过；Cloudflare 公网因旧缓存规则仍失败 |
 | `npm audit --json` / `npm audit --omit=dev --json` | 全量与生产依赖均为 0 vulnerabilities |
 | `git diff --check` | 通过；仅有 Windows 行尾提示 |
-| Gitleaks 完整历史扫描 | 61 个可达提交，0 命中 |
+| Gitleaks 完整历史扫描 | 全部可达提交，0 命中 |
 | 改写对象检查 | 21 个旧私密或大型文件对象均不可达；旧密码和 HMAC 原值均为 0 次残留 |
 
 ## 修改文件

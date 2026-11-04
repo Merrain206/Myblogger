@@ -4,9 +4,9 @@
 
 ## 结论
 
-仓库内可执行的高风险修复已经完成并通过自动化验证。生产依赖 `npm audit --omit=dev` 为 0 漏洞；17 项安全测试、TypeScript、lint、Next.js 生产构建与 RSC/HTML 缓存隔离回归均通过。
+仓库内可执行的高风险修复已经完成并通过自动化验证。生产依赖 `npm audit --omit=dev` 为 0 漏洞；18 项安全测试、TypeScript、lint、Next.js 生产构建与 RSC/HTML 缓存隔离回归均通过。
 
-修复版本已部署到生产源站；管理员密码与会话签名密钥已重新生成，JSON 已迁移到 SQLite，Nginx 与最小权限 Docker 桥已上线。Cloudflare 缓存规则、源站证书、隧道路由和公网端口均已完成加固；仓库已设为私有。Git 分支历史已改写并通过扫描，但 GitHub 仍能按旧 SHA 返回不可达对象，必须由 GitHub Support 完成服务端清除后才能公开。HSTS 和 DeepSeek 平台密钥轮换仍需按下文条件处理。
+修复版本已部署到生产源站；管理员密码与会话签名密钥已重新生成，JSON 已迁移到 SQLite，Nginx 与最小权限 Docker 桥已上线。Cloudflare 缓存规则、源站证书、隧道路由和公网端口均已完成加固；仓库已设为私有。Git 分支历史已改写并通过扫描，但 GitHub 仍能按旧 SHA 返回不可达对象，必须由 GitHub Support 完成服务端清除后才能公开。HSTS 已以短周期启用，DeepSeek 平台密钥已完成轮换并部署。
 
 ## 漏洞修复与验证
 
@@ -110,7 +110,7 @@
 
 ## 待人工执行（按优先级）
 
-1. **P0：由仓库所有者在 DeepSeek 平台轮换 API Key**，再只更新服务器密钥并重启应用；完成前继续保持仓库私有。
+1. **已完成：DeepSeek API Key 已轮换。** 2026-11-04 已仅更新服务器对应环境变量、重启应用，并通过无个人信息的最小请求验证新 Key 可用。
 2. **已完成：初始管理员密码已存入密码管理器**，服务器上的一次性明文文件 `/home/ubuntu/.merrain-initial-admin-password` 已删除并验证不存在。
 3. **P1：决定 `teach.merrain.cn` 的去留。** 该独立 Tunnel 当前返回 Cloudflare 530；修复或删除其 DNS 后，再逐步启用 HSTS，初期不要启用 `includeSubDomains` 或 preload。
 4. **处理中：GitHub Support 工单 #4896767 已提交。** 已请求删除缓存视图、对不可达对象执行垃圾回收并确认旧 SHA 不再可访问。Support 完成且复测旧 SHA 无法访问前不得公开。

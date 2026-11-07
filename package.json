@@ -55,7 +55,7 @@
     "@next/mdx": "^16.4.2",
     "@tailwindcss/typography": "^0.5.20",
     "@types/mdx": "^2.0.14",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.6",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

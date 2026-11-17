@@ -34,7 +34,7 @@
     "jspdf": "^4.2.1",
     "katex": "0.18.2",
     "lunar-typescript": "^1.8.6",
-    "next": "^16.4.2",
+    "next": "^16.4.5",
     "next-mdx-remote": "^6.0.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
